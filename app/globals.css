@@ -1,0 +1,64 @@
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --line: #e3e5ea;
+  --ink: #14171f;
+  --muted: #5b6270;
+  --blue: #1d4ed8;
+  --blue-bg: #eef2ff;
+  --orange: #c2410c;
+  --orange-bg: #fff4ed;
+  --green: #166534;
+  --green-bg: #f2fbf5;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; }
+a { color: var(--blue); text-decoration: none; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+.muted { color: var(--muted); font-size: 13px; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 96px; display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.card.alert { background: var(--orange-bg); border-color: #fbd5be; }
+.card.good { background: var(--green-bg); border-color: #bbe5c8; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.list { display: flex; flex-direction: column; gap: 8px; }
+.item { display: flex; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; color: inherit; }
+.item.late { border-color: #f4c3a6; }
+.item .title { font-weight: 600; }
+.badge { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--blue-bg); color: #1e3a8a; white-space: nowrap; }
+.badge.late { background: var(--orange-bg); color: var(--orange); }
+.badge.good { background: var(--green-bg); color: var(--green); }
+.badge.gray { background: #f1f2f5; color: #3d4350; }
+.section-label { font-size: 12px; font-weight: 700; letter-spacing: .03em; margin-top: 6px; }
+.section-label.late { color: var(--orange); }
+form.stack { display: flex; flex-direction: column; gap: 10px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+input, select, textarea { font: inherit; font-weight: 400; padding: 9px 10px; border: 1px solid #d5d8df; border-radius: 8px; background: #fff; color: var(--ink); }
+textarea { min-height: 80px; }
+button, .btn { font: inherit; font-weight: 600; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--blue); background: var(--blue); color: #fff; cursor: pointer; text-align: center; }
+button.secondary, .btn.secondary { background: #fff; color: var(--ink); border-color: #d5d8df; }
+button.danger { background: #fff; color: var(--orange); border-color: #f4c3a6; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.kpi { font-size: 22px; font-weight: 700; }
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 64px; }
+.bars div { flex: 1; background: #93a9e8; border-radius: 3px 3px 0 0; min-height: 2px; }
+.bars-labels { display: flex; gap: 4px; font-size: 10px; color: var(--muted); }
+.bars-labels span { flex: 1; text-align: center; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #f0f1f4; }
+th { color: var(--muted); font-weight: 500; }
+.msg { padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+.msg.error { background: var(--orange-bg); color: #7c2d12; }
+.msg.ok { background: var(--green-bg); color: var(--green); }
+nav.top { background: #fff; border-bottom: 1px solid var(--line); }
+nav.top .inner { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+nav.top a { padding: 7px 10px; border-radius: 8px; color: #3d4350; font-size: 14px; }
+nav.top a.logo { font-weight: 700; color: var(--ink); margin-right: 8px; }
+nav.bottom { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line); display: none; justify-content: space-around; padding: 8px 4px 18px; z-index: 10; }
+nav.bottom a { font-size: 12px; color: #3d4350; padding: 6px 8px; }
+@media (max-width: 720px) {
+  nav.top .links { display: none; }
+  nav.bottom { display: flex; }
+}
