@@ -53,8 +53,12 @@ export default async function Pipeline({ searchParams }: { searchParams: Promise
   return (
     <main className="wrap wide">
       <div className="row">
-        <h1 className="grow">Pipeline</h1>
-        <Link href="/leads/new" className="btn">+ Νέο lead</Link>
+        <h1 className="grow" style={{ margin: 0 }}>Pipeline</h1>
+        <div className="seg-toggle" role="group" aria-label="Προβολή">
+          <span className="on">Κάρτες</span>
+          <Link href="/leads">Λίστα</Link>
+        </div>
+        <Link href="/leads/new" className="btn">+ Νέο deal</Link>
       </div>
       <div className="row">
         <span className="badge gray">{cards.length} ανοιχτά deals</span>

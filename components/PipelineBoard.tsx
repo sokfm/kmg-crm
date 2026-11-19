@@ -44,25 +44,35 @@ export function PipelineBoard({ cards, today, wonMonth, lostMonth }: { cards: Ca
           const col = cards.filter((c) => c.status === key);
           const sum = col.reduce((t, c) => t + Number(c.expected_value ?? 0), 0);
           return (
-            <section key={key} className={`col ${over === key ? "over" : ""}`} {...zone(key)}>
+            <section key={key} className={`col col-${key} ${over === key ? "over" : ""}`} {...zone(key)}>
               <header>
-                <strong>{label}</strong> <span className="badge gray">{col.length}</span>
-                <div className="muted">{sum ? eur(sum) : "—"}</div>
+                <span className="dot" />
+                <strong className="grow">{label}</strong>
+                <span className="col-n">{col.length}</span>
+                <div className="col-sum">{sum ? eur(sum) : "\u00a0"}</div>
               </header>
+              {col.length === 0 && <div className="col-empty">Σύρε εδώ ένα deal</div>}
               {col.map((c) => {
                 const late = c.next_step_due && c.next_step_due < today;
-                const stale = !c.last_contact || c.last_contact < plus(-14);
+                const days = c.last_contact ? Math.round((Date.parse(today) - Date.parse(c.last_contact)) / 86400000) : null;
+                const stale = days == null || days >= 14;
+                const ini = (c.owner ?? "").split(" ").map((w) => w[0]).slice(0, 2).join("");
                 return (
                   <article key={c.id} className={`deal ${late ? "late" : ""}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", c.id)}>
-                    <Link href={`/leads/${c.id}`} className="title">{c.company_name}</Link>
-                    <div className="muted">
-                      {c.owner ?? "Χωρίς ανάθεση"}{c.product_line === "digital" ? " · digital" : ""}{c.stations.length ? " · " + c.stations.join(", ") : ""}
+                    <div className="deal-top">
+                      <Link href={`/leads/${c.id}`} className="title">{c.company_name}</Link>
+                      {c.expected_value ? <span className="val">{eur(Number(c.expected_value))}</span> : null}
                     </div>
-                    {c.expected_value ? <div className="val">{eur(Number(c.expected_value))}</div> : null}
                     <div className={`next ${late ? "late" : ""}`}>
                       → {c.next_step ?? "—"}{c.next_step_due ? ` · ${day(c.next_step_due)}` : ""}
                     </div>
-                    {stale && <div className="muted" style={{ fontSize: 11 }}>⚠ καμία επαφή 14+ μέρες</div>}
+                    <div className="deal-foot">
+                      {c.product_line === "digital" && <span className="tag dig">digital</span>}
+                      {c.stations.map((st) => <span key={st} className="tag">{st}</span>)}
+                      <span className="grow" />
+                      {stale && <span className="stale">{days == null ? "καμία επαφή" : `${days} μέρες χωρίς επαφή`}</span>}
+                      {ini ? <span className="own" title={c.owner ?? ""}>{ini}</span> : <span className="own none" title="Χωρίς ανάθεση">?</span>}
+                    </div>
                     <button type="button" className="secondary mv" onClick={() => setMove({ card: c, to: OPEN[Math.min(OPEN.findIndex(([k]) => k === c.status) + 1, OPEN.length - 1)][0] })}>
                       Μετακίνηση ›
                     </button>
@@ -74,12 +84,12 @@ export function PipelineBoard({ cards, today, wonMonth, lostMonth }: { cards: Ca
         })}
         <section className="col closed">
           <div className={`drop won ${over === "won" ? "over" : ""}`} {...zone("won")}>
-            <strong>✓ Κλείσαμε</strong>
+            <strong>Κλείσαμε</strong>
             <div className="muted">αυτόν τον μήνα: {wonMonth.n}{wonMonth.v ? ` · ${eur(wonMonth.v)}` : ""}</div>
             <div className="muted" style={{ fontSize: 11 }}>σύρε εδώ</div>
           </div>
           <div className={`drop lost ${over === "lost" ? "over" : ""}`} {...zone("lost")}>
-            <strong>✕ Χάθηκε</strong>
+            <strong>Χάθηκε</strong>
             <div className="muted">αυτόν τον μήνα: {lostMonth}</div>
             <div className="muted" style={{ fontSize: 11 }}>σύρε εδώ</div>
           </div>

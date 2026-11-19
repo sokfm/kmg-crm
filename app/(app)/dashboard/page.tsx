@@ -1,28 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchRevenue, type RevRow } from "@/lib/revenue";
 import { requireProfile } from "@/lib/auth";
 import { CHANNEL, eur, today } from "@/lib/format";
 
-type Row = { year: number; month: number; station: string; owner_id: string | null; channel: string; agency_id: string | null; amount: number };
+type Row = RevRow;
 
 const MONTHS = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μάι", "Ιούν", "Ιούλ", "Αύγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"];
 const MONTHS_FULL = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"];
-
-// Το Supabase δίνει μέχρι 1.000 γραμμές τη φορά: φέρνουμε σε σελίδες.
-async function fetchAll(db: SupabaseClient, years: number[]) {
-  const out: Row[] = [];
-  for (let from = 0; from < 50000; from += 1000) {
-    const { data } = await db
-      .from("revenue_monthly")
-      .select("year, month, station, owner_id, channel, agency_id, amount")
-      .in("year", years)
-      .range(from, from + 999);
-    out.push(...((data ?? []) as Row[]));
-    if (!data || data.length < 1000) break;
-  }
-  return out;
-}
 
 function Delta({ cur, prev }: { cur: number; prev: number }) {
   if (!prev) return <span className="muted">πέρσι: —</span>;
@@ -47,7 +32,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const upTo = Y === nowY ? nowM : 12;
 
   const [rows, { data: yearly }, { data: people }, { data: agencies }, { data: open }] = await Promise.all([
-    fetchAll(supabase, [Y, Y - 1]),
+    fetchRevenue(supabase, [Y, Y - 1]),
     supabase.from("revenue_yearly").select("year, amount").order("year"),
     supabase.from("profiles").select("id, full_name"),
     supabase.from("agencies").select("id, name"),
@@ -154,8 +139,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <h2 className="grow">Τζίρος ανά μήνα</h2>
           <span className="legend">
             <span><i style={{ background: "var(--blue)" }} />{Y}</span>
-            <span><i style={{ background: "#cfd6e6" }} />{Y - 1}</span>
-            {Y === nowY && <span><i style={{ background: "#93a9e8" }} />κλεισμένα (μελλοντικοί μήνες)</span>}
+            <span><i style={{ background: "#d9d4de" }} />{Y - 1}</span>
+            {Y === nowY && <span><i style={{ background: "#f3a6e8" }} />κλεισμένα (μελλοντικοί μήνες)</span>}
           </span>
         </div>
         <div className="chart">

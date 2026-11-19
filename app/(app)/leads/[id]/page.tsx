@@ -102,7 +102,7 @@ export default async function LeadPage({
 
           {tab === "activity" ? (
             <>
-              <form action={addActivity} className="stack sf-composer">
+              <form action={addActivity} className="stack sf-composer" id="log">
                 <input type="hidden" name="lead_id" value={lead.id} />
                 <div className="seg">
                   {Object.entries(ACTIVITY).map(([k, v], i) => (

@@ -70,7 +70,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
     <main className="wrap wide sf">
       <div className="card sf-head">
         <div className="row">
-          <div className="sf-icon" style={{ background: "#7f56d9" }}>Π</div>
+          <div className="sf-icon" style={{ background: "var(--night)", color: "#fff" }}>Π</div>
           <div className="grow">
             <div className="muted">Πελάτες</div>
             <h1 style={{ margin: 0 }}>{total} πελάτες</h1>
