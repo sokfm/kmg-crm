@@ -353,4 +353,17 @@ do $$ begin
 end $$;
 reset role;
 
+-- 21. Τιμές ανά δευτερόλεπτο: όλοι βλέπουν, μόνο admin αλλάζει
+select as_user(3);
+update station_rates set media_shop_sec = 0.01 where station = 'ΣΟΚ FM';
+do $$ begin
+  assert (select media_shop_sec from station_rates where station = 'ΣΟΚ FM') = 0.35, 'πωλητής άλλαξε τιμή σταθμού';
+end $$;
+select as_user(1);
+update station_rates set media_shop_sec = 0.36 where station = 'ΣΟΚ FM';
+do $$ begin
+  assert (select media_shop_sec from station_rates where station = 'ΣΟΚ FM') = 0.36, 'admin δεν άλλαξε τιμή σταθμού';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

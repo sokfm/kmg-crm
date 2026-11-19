@@ -669,3 +669,21 @@ export async function savePackage(f: FormData) {
   if (error) back("/pricing", { error: friendly(error.message) });
   back("/pricing", { ok: "pkgadded" });
 }
+
+export async function saveStationRates(f: FormData) {
+  const { supabase, isAdmin } = await requireProfile();
+  if (!isAdmin) back("/pricing", { error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
+  const num = (k: string) => {
+    const v = s(f, k);
+    if (v == null) return null;
+    const n = Number(v.replace(",", "."));
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const row = { media_shop_sec: num("media_shop_sec"), government_sec: num("government_sec"), local_per_k: num("local_per_k"), direct_per_k: num("direct_per_k") };
+  if (Object.values(row).some((v) => v == null)) back("/pricing", { error: "Συμπλήρωσε όλες τις τιμές (π.χ. 0,35)" });
+  const { data, error } = await supabase.from("station_rates").update(row).eq("station", s(f, "station")).eq("version", Number(s(f, "version"))).select("station");
+  revalidatePath("/pricing");
+  if (error) back("/pricing", { error: friendly(error.message) });
+  if (!data || data.length === 0) back("/pricing", { conflict: "1" });
+  back("/pricing", { ok: "pkgsaved" });
+}

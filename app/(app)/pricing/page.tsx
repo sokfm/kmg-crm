@@ -1,7 +1,10 @@
 import { requireProfile } from "@/lib/auth";
 import { Flash } from "@/components/Flash";
 import { SubmitButton } from "@/components/SubmitButton";
-import { savePackage } from "../actions";
+import { savePackage, saveStationRates } from "../actions";
+
+type Rate = { station: string; media_shop_sec: number; government_sec: number; local_per_k: number; direct_per_k: number; version: number };
+const sec = (n: number) => new Intl.NumberFormat("el-GR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n) + " €";
 
 type Pkg = {
   id: string; station: string; kind: "spots" | "sponsorship" | "mention"; client_type: "local" | "media" | "all";
@@ -32,6 +35,8 @@ export default async function Pricing({ searchParams }: { searchParams: Promise<
   const { supabase, isAdmin } = await requireProfile();
   const { data } = await supabase.from("price_packages").select("*").order("sort").order("name");
   const all = (data ?? []) as Pkg[];
+  const { data: rd } = await supabase.from("station_rates").select("*").order("sort");
+  const rates = (rd ?? []) as Rate[];
   const client = sp.c === "local" || sp.c === "media" ? sp.c : null;
   const pkgs = all.filter((p) => (isAdmin || p.active) && (!client || p.client_type === client || p.client_type === "all"));
   const station = STATIONS.includes(sp.s) ? sp.s : null;
@@ -52,6 +57,45 @@ export default async function Pricing({ searchParams }: { searchParams: Promise<
         Από 3 μήνες και πάνω ισχύει το <strong>bonus</strong> με προπληρωμή· χωρίς προπληρωμή ο πελάτης πληρώνει την κανονική τιμή
         και η διαφορά αφαιρείται στον τελευταίο μήνα.
       </p>
+
+      <section className="card stack" style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Τιμή ανά δευτερόλεπτο</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          <strong>Media shop</strong>: η τιμή προς τα πρακτορεία (η επιστροφή τους είναι μέσα σε αυτή). <strong>Κρατικές</strong>: κρατικές διαφημίσεις.
+          <strong> Κοστολόγηση πλάνου</strong>: € ανά δευτερόλεπτο για κάθε 1.000 ακροατές της ώρας (Χαλκίδα - Εύβοια) — τοπικός πελάτης / μεγάλος πελάτης direct.
+        </p>
+        <table className="table">
+          <thead><tr><th>Σταθμός</th><th style={{ textAlign: "right" }}>Media shop</th><th style={{ textAlign: "right" }}>Κρατικές</th><th style={{ textAlign: "right" }}>Πλάνο τοπικού / 1.000</th><th style={{ textAlign: "right" }}>Πλάνο direct / 1.000</th>{isAdmin && <th />}</tr></thead>
+          <tbody>
+            {rates.map((r) => (
+              <tr key={r.station}>
+                <td><strong>{r.station}</strong></td>
+                <td style={{ textAlign: "right" }}>{sec(r.media_shop_sec)}/sec</td>
+                <td style={{ textAlign: "right" }}>{sec(r.government_sec)}/sec</td>
+                <td style={{ textAlign: "right" }}>{sec(r.local_per_k)}</td>
+                <td style={{ textAlign: "right" }}>{sec(r.direct_per_k)}</td>
+                {isAdmin && (
+                  <td>
+                    <details>
+                      <summary className="muted" style={{ cursor: "pointer" }}>Αλλαγή</summary>
+                      <form action={saveStationRates} className="stack" style={{ marginTop: 8, minWidth: 220 }}>
+                        <input type="hidden" name="station" value={r.station} />
+                        <input type="hidden" name="version" value={r.version} />
+                        <label>Media shop €/sec<input name="media_shop_sec" inputMode="decimal" defaultValue={String(r.media_shop_sec)} /></label>
+                        <label>Κρατικές €/sec<input name="government_sec" inputMode="decimal" defaultValue={String(r.government_sec)} /></label>
+                        <label>Πλάνο τοπικού<input name="local_per_k" inputMode="decimal" defaultValue={String(r.local_per_k)} /></label>
+                        <label>Πλάνο direct<input name="direct_per_k" inputMode="decimal" defaultValue={String(r.direct_per_k)} /></label>
+                        <SubmitButton pending="Αποθήκευση…">Αποθήκευση</SubmitButton>
+                      </form>
+                    </details>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>Παράδειγμα: σποτ 30&apos;&apos; στον ΣΟΚ για media shop = 30 × {rates[0] ? sec(rates[0].media_shop_sec) : "—"} = {rates[0] ? eur(30 * rates[0].media_shop_sec) : "—"}.</p>
+      </section>
 
       <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
         <a className={`chip ${!station ? "on" : ""}`} href={link(null, client)}>Όλοι οι σταθμοί</a>
