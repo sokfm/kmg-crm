@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { moveLead } from "@/app/(app)/actions";
-import { SubmitButton } from "@/components/SubmitButton";
+import { MoveDialog } from "@/components/MoveDialog";
 
 export type Card = {
   id: string; version: number; company_name: string; status: string; next_step: string | null; next_step_due: string | null;
@@ -17,8 +16,6 @@ const OPEN = [
   ["proposal", "Πρόταση"],
   ["negotiation", "Διαπραγμάτευση"],
 ] as const;
-const LOST: Record<string, string> = { not_now: "Όχι τώρα", no_budget: "Όχι budget", competitor: "Πήγε σε άλλον σταθμό", never: "Όχι ποτέ" };
-const ALL: Record<string, string> = { ...Object.fromEntries(OPEN), won: "Κλείσαμε ✓", lost: "Χάθηκε" };
 
 const eur = (v: number) => new Intl.NumberFormat("el-GR", { maximumFractionDigits: 0 }).format(v) + " €";
 const day = (d: string) => new Intl.DateTimeFormat("el-GR", { day: "numeric", month: "short" }).format(new Date(d));
@@ -89,52 +86,7 @@ export function PipelineBoard({ cards, today, wonMonth, lostMonth }: { cards: Ca
         </section>
       </div>
 
-      {move && (
-        <div className="modal-bg" onClick={() => setMove(null)}>
-          <form action={moveLead} className="modal stack" onClick={(e) => e.stopPropagation()}>
-            <input type="hidden" name="id" value={move.card.id} />
-            <input type="hidden" name="version" value={move.card.version} />
-            <h2>{move.card.company_name}</h2>
-            <label>Πάει στο
-              <select name="status" value={move.to} onChange={(e) => setMove({ ...move, to: e.target.value })}>
-                {Object.entries(ALL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </label>
-            {move.to === "lost" ? (
-              <>
-                <label>Τι «όχι» ήταν *
-                  <select name="lost_kind" required defaultValue="">
-                    <option value="" disabled>Διάλεξε…</option>
-                    {Object.entries(LOST).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </label>
-                <label>Γιατί (με δικά σου λόγια)<input name="lost_reason" /></label>
-                <div className="grid2">
-                  <label>Πότε ξαναχτυπάμε την πόρτα;<input name="next_step" placeholder="π.χ. Ξανά πριν το Πάσχα" /></label>
-                  <label>Ημερομηνία<input name="next_step_due" type="date" defaultValue={plus(90)} /></label>
-                </div>
-              </>
-            ) : move.to === "won" ? (
-              <>
-                <label>Αξία που κλείσαμε (€)<input name="expected_value" inputMode="decimal" defaultValue={move.card.expected_value ?? ""} placeholder="π.χ. 1.500" /></label>
-                <p className="muted">Ο τζίρος στο dashboard θα έρχεται από την τιμολόγηση· αυτή η αξία μετράει στα «κλεισμένα deals».</p>
-              </>
-            ) : (
-              <>
-                <div className="grid2">
-                  <label>Επόμενο βήμα *<input name="next_step" required defaultValue={move.card.next_step ?? ""} placeholder="π.χ. Στέλνω πρόταση" /></label>
-                  <label>Πότε *<input name="next_step_due" type="date" required defaultValue={move.card.next_step_due && move.card.next_step_due >= today ? move.card.next_step_due : plus(2)} /></label>
-                </div>
-                <label>Εκτιμώμενη αξία (€)<input name="expected_value" inputMode="decimal" defaultValue={move.card.expected_value ?? ""} placeholder="π.χ. 1.500" /></label>
-              </>
-            )}
-            <div className="row">
-              <SubmitButton pending="Αποθήκευση…">Αποθήκευση</SubmitButton>
-              <button type="button" className="secondary" onClick={() => setMove(null)}>Άκυρο</button>
-            </div>
-          </form>
-        </div>
-      )}
+      {move && <MoveDialog card={move.card} to={move.to} today={today} back="/pipeline" onClose={() => setMove(null)} />}
     </>
   );
 }

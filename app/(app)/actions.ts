@@ -102,12 +102,13 @@ export async function moveLead(f: FormData) {
   const { supabase } = await requireProfile();
   const id = s(f, "id")!;
   const status = s(f, "status")!;
+  const to = s(f, "back")?.startsWith("/") ? s(f, "back")! : "/pipeline";
   const patch: Record<string, unknown> = { status };
   if (f.has("expected_value")) patch.expected_value = money(s(f, "expected_value"));
   if (status === "lost") {
     patch.lost_kind = s(f, "lost_kind");
     patch.lost_reason = s(f, "lost_reason");
-    if (!patch.lost_kind) back("/pipeline", { error: "Διάλεξε τι «όχι» ήταν" });
+    if (!patch.lost_kind) back(to, { error: "Διάλεξε τι «όχι» ήταν" });
   } else {
     patch.lost_kind = null;
     patch.lost_reason = null;
@@ -121,10 +122,11 @@ export async function moveLead(f: FormData) {
   }
   const { data, error } = await supabase.from("leads").update(patch).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
   revalidatePath("/pipeline");
+  revalidatePath(`/leads/${id}`);
   revalidatePath("/today");
-  if (error) back("/pipeline", { error: friendly(error.message) });
-  if (!data || data.length === 0) back("/pipeline", { conflict: "1" });
-  back("/pipeline", { ok: status === "won" ? "won" : "moved" });
+  if (error) back(to, { error: friendly(error.message) });
+  if (!data || data.length === 0) back(to, { conflict: "1" });
+  back(to, { ok: status === "won" ? "won" : "moved" });
 }
 
 export async function assignLead(f: FormData) {
