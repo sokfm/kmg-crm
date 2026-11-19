@@ -136,4 +136,48 @@ do $$ begin
 end $$;
 reset role;
 
+-- 11. Email: ο Κώστας δεν βλέπει τα email του Νίκου ούτε το κλειδί Outlook
+insert into mail_accounts (user_id, ms_email, refresh_token) values ('00000000-0000-0000-0000-000000000001','nikos@sokfm.gr','SECRET');
+insert into email_messages (user_id, graph_id, direction, counterpart_email, subject, occurred_at, status)
+values ('00000000-0000-0000-0000-000000000001','g1','in','a@b.gr','Τιμές διαφήμισης',now(),'review');
+select as_user(3);
+do $$ begin
+  assert (select count(*) from email_messages) = 0, 'ο Κώστας βλέπει email του Νίκου';
+  assert (select count(*) from my_mail_account) = 0, 'ο Κώστας βλέπει σύνδεση Outlook του Νίκου';
+  begin
+    perform refresh_token from mail_accounts;
+    raise exception 'ο Κώστας διάβασε το κλειδί Outlook';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+select as_user(1);
+do $$ begin
+  assert (select count(*) from email_messages) = 1, 'ο Νίκος δεν βλέπει τα email του';
+  assert (select count(*) from my_mail_account) = 1, 'ο Νίκος δεν βλέπει τη σύνδεσή του';
+  begin
+    perform refresh_token from mail_accounts;
+    raise exception 'ο Νίκος διάβασε το κλειδί Outlook από την εφαρμογή';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+-- 12. Εργασίες: ο Νίκος αναθέτει στον Κώστα → ειδοποίηση· ο Κώστας βλέπει μόνο τις δικές του
+insert into tasks (title, owner_id, due_date) values ('Πρόταση στον ΠΑΛΟΚΑ','00000000-0000-0000-0000-000000000003','2026-11-25');
+insert into tasks (title, owner_id) values ('Δική μου εργασία','00000000-0000-0000-0000-000000000001');
+select as_user(3);
+do $$ begin
+  assert (select count(*) from tasks) = 1, 'ο Κώστας βλέπει λάθος εργασίες';
+  assert exists (select 1 from notifications where kind='task_assigned'), 'καμία ειδοποίηση εργασίας';
+  begin
+    insert into tasks (title, owner_id) values ('Για τη Μαρία','00000000-0000-0000-0000-000000000004');
+    raise exception 'ο Κώστας ανέθεσε σε άλλον';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+update tasks set status = 'done';
+reset role;
+do $$ begin
+  assert (select done_at from tasks where title='Πρόταση στον ΠΑΛΟΚΑ') is not null, 'δεν μπήκε ώρα ολοκλήρωσης';
+end $$;
+
 select 'ALL TESTS PASSED' as result;

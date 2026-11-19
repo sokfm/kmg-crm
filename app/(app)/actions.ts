@@ -176,3 +176,132 @@ function friendly(msg?: string) {
   if (msg.includes("row-level security")) return "Δεν έχεις δικαίωμα για αυτή την αλλαγή.";
   return msg;
 }
+
+// ---------- Εργασίες ----------
+
+export async function createTask(f: FormData) {
+  const { supabase, profile, isAdmin } = await requireProfile();
+  const backTo = s(f, "back") ?? "/tasks";
+  const title = s(f, "title");
+  if (!title) back(backTo, { error: "Γράψε τι πρέπει να γίνει" });
+  const { error } = await supabase.from("tasks").insert({
+    title,
+    details: s(f, "details"),
+    due_date: s(f, "due_date"),
+    owner_id: isAdmin ? s(f, "owner_id") ?? profile.id : profile.id,
+    customer_id: s(f, "customer_id"),
+    lead_id: s(f, "lead_id"),
+  });
+  revalidatePath(backTo);
+  if (error) back(backTo, { error: friendly(error.message) });
+  back(backTo, { ok: "task" });
+}
+
+export async function completeTask(f: FormData) {
+  const { supabase } = await requireProfile();
+  const backTo = s(f, "back") ?? "/tasks";
+  const done = s(f, "done") !== "0";
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status: done ? "done" : "open", done_at: done ? new Date().toISOString() : null })
+    .eq("id", s(f, "id")!);
+  revalidatePath(backTo);
+  revalidatePath("/today");
+  if (error) back(backTo, { error: friendly(error.message) });
+  back(backTo, { ok: done ? "taskdone" : "1" });
+}
+
+// ---------- Email «Προς έλεγχο» ----------
+
+async function loadReviewEmail(id: string) {
+  const ctx = await requireProfile();
+  const { data: em } = await ctx.supabase.from("email_messages").select("*").eq("id", id).maybeSingle();
+  if (!em) back("/inbox", { error: "Το email δεν βρέθηκε" });
+  return { ...ctx, em: em! };
+}
+
+export async function reviewAsLead(f: FormData) {
+  const { supabase, profile, isAdmin, em } = await loadReviewEmail(s(f, "id")!);
+  const company = s(f, "company") ?? em.ai_company ?? em.counterpart_name ?? em.counterpart_email;
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const { data: lead, error } = await supabase
+    .from("leads")
+    .insert({
+      company_name: company,
+      contact_name: s(f, "contact_name") ?? em.ai_contact_name,
+      phone: s(f, "phone") ?? em.ai_phone,
+      email: em.counterpart_email,
+      source: "email",
+      next_step: s(f, "next_step") ?? "Πρώτη επαφή (lead από email)",
+      next_step_due: s(f, "next_step_due") ?? tomorrow,
+      notes: `Από email: «${em.subject}» — ${em.summary ?? ""}`,
+      owner_id: isAdmin ? s(f, "owner_id") : null,
+    })
+    .select("id")
+    .single();
+  if (error || !lead) back("/inbox", { error: friendly(error?.message) });
+  await supabase.from("contacts").insert({ email: em.counterpart_email, name: em.counterpart_name, lead_id: lead!.id, created_by: profile.id });
+  await supabase.from("email_messages").update({ status: "lead_created", lead_id: lead!.id, decided_at: new Date().toISOString() }).eq("id", em.id);
+  await supabase.from("activities").insert({
+    lead_id: lead!.id,
+    type: "email",
+    summary: `${em.direction === "in" ? "📥" : "📤"} ${em.subject}${em.summary ? " — " + em.summary : ""}`,
+    occurred_at: em.occurred_at,
+    email_message_id: em.id,
+  });
+  revalidatePath("/inbox");
+  redirect(`/leads/${lead!.id}?ok=created`);
+}
+
+export async function reviewAsCustomer(f: FormData) {
+  const { supabase, profile, em } = await loadReviewEmail(s(f, "id")!);
+  const customerId = s(f, "customer_id");
+  if (!customerId) back("/inbox", { error: "Διάλεξε πελάτη" });
+  // Μαθαίνει τη διεύθυνση, ώστε την επόμενη φορά να το συνδέσει μόνο του.
+  // Τα πρακτορεία στέλνουν για πολλούς πελάτες: εκεί δεν τη «δένουμε» σε έναν.
+  if (s(f, "remember") === "1") {
+    await supabase.from("contacts").insert({ email: em.counterpart_email, name: em.counterpart_name, customer_id: customerId, created_by: profile.id });
+  }
+  await supabase.from("email_messages").update({ status: "logged", customer_id: customerId, decided_at: new Date().toISOString() }).eq("id", em.id);
+  const { error } = await supabase.from("activities").insert({
+    customer_id: customerId,
+    type: "email",
+    summary: `${em.direction === "in" ? "📥" : "📤"} ${em.subject}${em.summary ? " — " + em.summary : ""}`,
+    occurred_at: em.occurred_at,
+    email_message_id: em.id,
+  });
+  revalidatePath("/inbox");
+  if (error) back("/inbox", { error: friendly(error.message) });
+  back("/inbox", { ok: "linked" });
+}
+
+export async function reviewIgnore(f: FormData) {
+  const { supabase, profile, em } = await loadReviewEmail(s(f, "id")!);
+  const mode = s(f, "mode");
+  if (mode === "sender" || mode === "domain") {
+    const pattern = mode === "sender" ? em.counterpart_email : em.counterpart_email.slice(em.counterpart_email.indexOf("@"));
+    await supabase.from("ignored_senders").upsert({ pattern: pattern.toLowerCase(), created_by: profile.id });
+  }
+  await supabase.from("email_messages").update({ status: "ignored", decided_at: new Date().toISOString() }).eq("id", em.id);
+  revalidatePath("/inbox");
+  back("/inbox", { ok: "ignored" });
+}
+
+// ---------- Outlook ----------
+
+export async function syncMailNow() {
+  const { profile } = await requireProfile();
+  const { supabaseAdmin } = await import("@/lib/supabase/admin");
+  const { syncAll } = await import("@/lib/mail/sync");
+  const [r] = await syncAll(supabaseAdmin(), profile.id);
+  if (!r) back("/settings", { error: "Δεν έχεις συνδέσει Outlook" });
+  if (r.error) back("/settings", { error: r.error });
+  back("/settings", { ok: "sync", n: `${r.logged}-${r.leads}-${r.review}-${r.tasks}` });
+}
+
+export async function disconnectOutlook() {
+  const { profile } = await requireProfile();
+  const { supabaseAdmin } = await import("@/lib/supabase/admin");
+  await supabaseAdmin().from("mail_accounts").delete().eq("user_id", profile.id);
+  back("/settings", { ok: "disconnected" });
+}

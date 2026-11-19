@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, LOST_KINDS, STAGES, dateGr } from "@/lib/format";
 import { addActivity, updateLead } from "../../actions";
 import { Flash } from "@/components/Flash";
+import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
 export default async function LeadPage({
   params, searchParams,
@@ -24,6 +25,9 @@ export default async function LeadPage({
   const activities = (acts ?? []) as unknown as { id: string; type: string; summary: string; occurred_at: string; profiles: { full_name: string } | null }[];
   const lastContact = activities.find((a) => a.type !== "note");
   const in3 = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+
+  const { data: taskData } = await supabase.from("tasks").select(TASK_SELECT).eq("lead_id", lead.id).eq("status", "open").order("due_date");
+  const openTasks = (taskData ?? []) as unknown as TaskRow[];
 
   return (
     <main className="wrap" style={{ maxWidth: 760 }}>
@@ -56,6 +60,12 @@ export default async function LeadPage({
           <p className="muted">Η «Σημείωση» δεν μετράει ως επαφή. Μόνο κλήση, ραντεβού, Viber και email.</p>
           <button type="submit">Καταγραφή</button>
         </form>
+      </div>
+
+      <div className="card">
+        <h2>Εργασίες</h2>
+        <TaskList tasks={openTasks} back={`/leads/${lead.id}`} showTarget={false} showOwner />
+        <div style={{ marginTop: 10 }}><NewTaskForm back={`/leads/${lead.id}`} leadId={lead.id} /></div>
       </div>
 
       <div className="card">

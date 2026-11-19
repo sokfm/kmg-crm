@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { STAGES, dateGr } from "@/lib/format";
+import { TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
 type Row = {
   id: string; company_name: string; status: string; next_step: string; next_step_due: string;
@@ -14,6 +15,12 @@ export default async function Today() {
   const late = rows.filter((r) => r.is_overdue);
   const now = rows.filter((r) => r.is_today);
   const tomorrow = rows.filter((r) => !r.is_overdue && !r.is_today);
+
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const { data: taskData } = await supabase.from("tasks").select(TASK_SELECT)
+    .eq("owner_id", profile.id).eq("status", "open").lte("due_date", tomorrowStr).order("due_date");
+  const myTasks = (taskData ?? []) as unknown as TaskRow[];
+  const { count: reviewCount } = await supabase.from("email_messages").select("id", { count: "exact", head: true }).eq("status", "review");
 
   let toAssign = 0, toApprove = 0, toMerge = 0;
   if (isAdmin) {
@@ -46,7 +53,7 @@ export default async function Today() {
       <div>
         <h1>{greeting()}, {profile.full_name.split(" ")[0]}</h1>
         <p className="muted">
-          {rows.length === 0 ? "Τίποτα για σήμερα. Ώρα να ψάξεις στη βάση πελατών." : `${late.length + now.length} βήματα για σήμερα, ${late.length} καθυστερημένα.`}
+          {rows.length + myTasks.length === 0 ? "Τίποτα για σήμερα. Ώρα να ψάξεις στη βάση πελατών." : `${late.length + now.length} βήματα σε leads και ${myTasks.length} εργασίες για σήμερα και αύριο.`}
         </p>
       </div>
 
@@ -57,6 +64,15 @@ export default async function Today() {
           {toMerge > 0 && <Link href="/merges" className="badge gray">{toMerge === 1 ? "1 ομάδα πελατών για έλεγχο" : `${toMerge} ομάδες πελατών για έλεγχο`}</Link>}
         </div>
       )}
+
+      {!!reviewCount && (
+        <Link href="/inbox" className="card alert row" style={{ color: "inherit" }}>
+          <strong>📧 {reviewCount === 1 ? "1 email" : `${reviewCount} email`} περιμένουν να πεις αν είναι lead ή πελάτης</strong>
+          <span className="grow" /><span>Άνοιγμα →</span>
+        </Link>
+      )}
+
+      {myTasks.length > 0 && (<><div className="section-label">ΕΡΓΑΣΙΕΣ</div><TaskList tasks={myTasks} back="/today" /></>)}
 
       {late.length > 0 && (<><div className="section-label late">ΚΑΘΥΣΤΕΡΗΜΕΝΑ</div><List items={late} cls="late" /></>)}
       {now.length > 0 && (<><div className="section-label">ΣΗΜΕΡΑ</div><List items={now} /></>)}

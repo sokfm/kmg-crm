@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr } from "@/lib/format";
 import { addActivity } from "../../actions";
 import { Flash } from "@/components/Flash";
+import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
 export default async function CustomerPage({
   params, searchParams,
@@ -34,6 +35,9 @@ export default async function CustomerPage({
   const max = Math.max(1, ...byYear.map(([, v]) => v));
   const lastActivity = acts?.find((a) => a.type !== "note");
 
+  const { data: taskData } = await supabase.from("tasks").select(TASK_SELECT).eq("customer_id", c.id).eq("status", "open").order("due_date");
+  const openTasks = (taskData ?? []) as unknown as TaskRow[];
+
   return (
     <main className="wrap">
       <div>
@@ -62,6 +66,12 @@ export default async function CustomerPage({
           <div className="bars-labels">{byYear.map(([y]) => <span key={y}>{y.slice(2)}</span>)}</div>
         </div>
       )}
+
+      <div className="card">
+        <h2>Εργασίες</h2>
+        <TaskList tasks={openTasks} back={`/customers/${c.id}`} showTarget={false} showOwner />
+        <div style={{ marginTop: 10 }}><NewTaskForm back={`/customers/${c.id}`} customerId={c.id} /></div>
+      </div>
 
       <div className="card">
         <h2>Κατέγραψε επαφή</h2>

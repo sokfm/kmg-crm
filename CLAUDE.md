@@ -17,6 +17,13 @@ CRM της Kartelias Media Group (ΣΟΚ FM, DALKAS, ΜΠΛΕ, NRG, lalala.gr). 
 - Ταυτόχρονη επεξεργασία: στήλη `version` — update με `.eq('version', v)`, 0 γραμμές = σύγκρουση → προειδοποίηση, ποτέ σιωπηλή αντικατάσταση.
 - Δεδομένα πελατών (data/, seed) και κλειδιά ΠΟΤΕ στο git.
 
+## Outlook και Εργασίες (Κομμάτι Α2)
+- Σύνδεση ανά χρήστη (OAuth Microsoft, delegated Mail.Read). Κλειδί ανανέωσης στον πίνακα `mail_accounts`, χωρίς πρόσβαση από την εφαρμογή (μόνο service role).
+- `/api/cron/mail-sync` κάθε 5' (vercel.json, CRON_SECRET): Εισερχόμενα + Απεσταλμένα → γνωστός πελάτης/lead → επαφή «Email» στην καρτέλα· σίγουρο νέο lead (AI ≥ 0.85, μόνο εισερχόμενα) → lead + ειδοποίηση· αβέβαιο → «Προς έλεγχο» (/inbox)· άσχετο → δεν αποθηκεύεται.
+- Κρατάμε μόνο θέμα, ημερομηνία, περίληψη, σύνδεσμο Outlook — όχι ολόκληρα email.
+- Εργασίες μόνο για πωλήσεις· programming/social/λοιπά → Asana (απόφαση Νίκου 19/11/2026).
+- Κλειδιά στη Vercel: SUPABASE_SERVICE_ROLE_KEY, MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, ANTHROPIC_API_KEY, CRON_SECRET (προαιρετικά ANTHROPIC_MODEL).
+
 ## Αλλαγές στη βάση
 - Νέο αρχείο `supabase/migrations/000N_περιγραφή.sql`, ποτέ αλλαγή παλιού.
 - Δοκιμή τοπικά: `supabase/tests/auth_stub.sql` + migrations + `supabase/tests/rls_test.sql` → «ALL TESTS PASSED».
@@ -26,5 +33,5 @@ CRM της Kartelias Media Group (ΣΟΚ FM, DALKAS, ΜΠΛΕ, NRG, lalala.gr). 
 `npx tsc --noEmit` και `npm run build` (με ψεύτικα NEXT_PUBLIC_SUPABASE_URL/ANON_KEY).
 
 ## Ανοιχτά
-- Email: Resend (domain sokfm.gr, eu-west-1) → Supabase SMTP, πρότυπο με 6ψήφιο κωδικό. DNS στο easy.gr μέσω Denis (Offgrid).
+- Email σύνδεσης: Resend (domain sokfm.gr, eu-west-1) → Supabase SMTP, πρότυπο με 6ψήφιο κωδικό. DNS στο easy.gr μέσω Denis (Offgrid).
 - Επόμενα κομμάτια: Β (pipeline, AI sales manager, chatbot, φωνητικά) και Γ (τιμοκατάλογος, συμβόλαια, τιμολόγηση, dashboard).
