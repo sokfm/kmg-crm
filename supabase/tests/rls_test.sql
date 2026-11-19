@@ -203,4 +203,44 @@ do $$ begin
 end $$;
 reset role;
 
+-- 14. Μερική ένωση: τα ατσέκαρα (2+) μένουν στη λίστα, το όνομα έρχεται από τα τσεκαρισμένα
+reset role;
+insert into customers (id, display_name, lifetime_revenue) values
+ ('40000000-0000-0000-0000-000000000001','ΚΤΗΜΑ ΑΛΦΑ',900),
+ ('40000000-0000-0000-0000-000000000002','ΚΤΗΜΑ ΒΗΤΑ',500),
+ ('40000000-0000-0000-0000-000000000003','ΚΤΗΜΑ ΒΗΤΑ ΧΟΡΗΓΙΑ',100),
+ ('40000000-0000-0000-0000-000000000004','ΚΤΗΜΑ ΓΑΜΜΑ',50);
+insert into customer_aliases (source_customer_id, customer_id, source_name) values
+ ('T14A','40000000-0000-0000-0000-000000000001','Α'),('T14B','40000000-0000-0000-0000-000000000002','Β'),
+ ('T14C','40000000-0000-0000-0000-000000000003','Γ'),('T14D','40000000-0000-0000-0000-000000000004','Δ');
+insert into merge_candidates (id, group_key, source_customer_ids, names) values
+ ('40000000-0000-0000-0000-0000000000aa','t14','{T14A,T14B,T14C,T14D}','{x}');
+select as_user(1);
+select merge_selected('40000000-0000-0000-0000-0000000000aa',
+  array['40000000-0000-0000-0000-000000000002','40000000-0000-0000-0000-000000000003']::uuid[], null);
+do $$ begin
+  assert (select display_name from customers where id='40000000-0000-0000-0000-000000000002') = 'ΚΤΗΜΑ ΒΗΤΑ', 'λάθος όνομα μετά την ένωση';
+  assert (select decision from merge_candidates where group_key='t14') = 'pending', 'η ομάδα έκλεισε ενώ έμειναν 2 ατσέκαρα';
+  assert (select source_customer_ids from merge_candidates where group_key='t14') @> '{T14A,T14D}'
+     and not (select source_customer_ids from merge_candidates where group_key='t14') && '{T14B,T14C}', 'λάθος ονόματα που έμειναν';
+end $$;
+select merge_selected('40000000-0000-0000-0000-0000000000aa', '{}'::uuid[], null);
+do $$ begin
+  assert (select decision from merge_candidates where group_key='t14') = 'different', 'δεν έκλεισε ως διαφορετικοί';
+end $$;
+select rename_customer('40000000-0000-0000-0000-000000000002','κτημα μπουρελη',
+  (select version from customers where id='40000000-0000-0000-0000-000000000002'));
+do $$ begin
+  assert (select display_name from customers where id='40000000-0000-0000-0000-000000000002') = 'ΚΤΗΜΑ ΜΠΟΥΡΕΛΗ', 'δεν έγινε μετονομασία';
+end $$;
+select as_user(3);
+do $$ begin
+  begin
+    perform rename_customer('40000000-0000-0000-0000-000000000002','Χ',99);
+    assert false, 'πωλητής μετονόμασε πελάτη';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

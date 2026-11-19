@@ -160,13 +160,29 @@ export async function decideMerge(f: FormData) {
   back("/merges", { ok: "1" });
 }
 
+export async function renameCustomer(f: FormData) {
+  const { supabase } = await requireProfile();
+  const id = s(f, "id")!;
+  const { error } = await supabase.rpc("rename_customer", { p_id: id, p_name: s(f, "name"), p_version: Number(s(f, "version")) });
+  revalidatePath(`/customers/${id}`);
+  if (error) back(`/customers/${id}`, { error: friendly(error.message) });
+  back(`/customers/${id}`, { ok: "saved" });
+}
+
 export async function mergeSelected(f: FormData) {
   const { supabase } = await requireProfile();
   const ids = f.getAll("ids").map(String);
+  // Όνομα: ό,τι γράφτηκε, αλλιώς του πελάτη με το «όνομα» — μόνο αν είναι τσεκαρισμένος.
+  let keepName = s(f, "keep_name");
+  const keepId = s(f, "keep_id");
+  if (!keepName && keepId && ids.includes(keepId)) {
+    const { data: k } = await supabase.from("customers").select("display_name").eq("id", keepId).maybeSingle();
+    keepName = k?.display_name ?? null;
+  }
   const { error } = await supabase.rpc("merge_selected", {
     p_group: s(f, "id"),
     p_ids: s(f, "none") === "1" ? [] : ids,
-    p_keep_name: s(f, "keep_name"),
+    p_keep_name: keepName,
   });
   revalidatePath("/merges");
   if (error) back("/merges", { error: friendly(error.message) });

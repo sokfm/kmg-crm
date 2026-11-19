@@ -3,7 +3,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr } from "@/lib/format";
-import { addActivity } from "../../actions";
+import { addActivity, renameCustomer } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
@@ -12,7 +12,7 @@ export default async function CustomerPage({
 }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase } = await requireProfile();
+  const { supabase, isAdmin } = await requireProfile();
   const { data: c } = await supabase
     .from("customers")
     .select("*, profiles!customers_owner_id_fkey(full_name)")
@@ -49,6 +49,17 @@ export default async function CustomerPage({
         </div>
       </div>
       <Flash sp={sp} />
+      {isAdmin && (
+        <details>
+          <summary className="muted" style={{ cursor: "pointer" }}>✏️ Αλλαγή ονόματος</summary>
+          <form action={renameCustomer} className="row" style={{ marginTop: 8 }}>
+            <input type="hidden" name="id" value={c.id} />
+            <input type="hidden" name="version" value={c.version} />
+            <input name="name" defaultValue={c.display_name} className="grow" required />
+            <SubmitButton>Αποθήκευση</SubmitButton>
+          </form>
+        </details>
+      )}
 
       <div className="grid2">
         <div className="card"><div className="muted">Συνολικός τζίρος</div><div className="kpi">{eur(c.lifetime_revenue)}</div></div>

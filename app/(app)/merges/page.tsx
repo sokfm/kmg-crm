@@ -37,7 +37,7 @@ export default async function Merges({ searchParams }: { searchParams: Promise<R
       <h1>Ίδιος πελάτης;</h1>
       <p className="muted">
         {count ?? 0} ομάδες ονομάτων από το αρχείο που ίσως είναι ο ίδιος πελάτης. Τσέκαρε <strong>μόνο όσα είναι ο ίδιος</strong> και
-        πάτα «Ένωσε τα τσεκαρισμένα». Όσα ξετσεκάρεις μένουν ξεχωριστοί πελάτες.
+        πάτα «Ένωσε τα τσεκαρισμένα». Όσα ξετσεκάρεις μένουν ξεχωριστοί πελάτες· αν είναι 2 ή περισσότερα, η ομάδα ξαναεμφανίζεται μόνο με αυτά.
       </p>
       <Flash sp={sp} />
       {groups.map((g) => {
@@ -55,10 +55,20 @@ export default async function Merges({ searchParams }: { searchParams: Promise<R
                   <input type="checkbox" name="ids" value={c.id} defaultChecked style={{ width: 18, height: 18 }} />
                   <span className="grow"><strong>{c.display_name}</strong></span>
                   <span className="muted">{eur(c.lifetime_revenue)} · {periodGr(c.last_period)}{c.status === "base" ? " · βάση" : ""}</span>
+                  <span className="row" style={{ gap: 4, fontWeight: 400 }} title="Αυτό το όνομα κρατάμε">
+                    <input type="radio" name="keep_id" value={c.id} style={{ width: 16, height: 16 }} /> όνομα
+                  </span>
                 </label>
               ))}
             </div>
-            <label>Όνομα που κρατάμε για όσα ενώνονται<input name="keep_name" defaultValue={ms[0]?.display_name ?? ""} /></label>
+            <label>
+              Ή γράψε άλλο όνομα για όσα ενώνονται
+              <input name="keep_name" placeholder="π.χ. ΚΤΗΜΑ ΜΠΟΥΡΕΛΗ" />
+            </label>
+            <p className="muted" style={{ margin: 0 }}>
+              Αν δεν διαλέξεις «όνομα» ούτε γράψεις κάτι, κρατάμε το όνομα του μεγαλύτερου σε τζίρο από τα <strong>τσεκαρισμένα</strong>.
+              Όσα αφήσεις ατσέκαρα (2 ή περισσότερα) μένουν εδώ για να τα ενώσεις μεταξύ τους.
+            </p>
             <div className="row">
               <SubmitButton pending="Ένωση…">Ένωσε τα τσεκαρισμένα</SubmitButton>
               <SubmitButton name="none" value="1" className="secondary" pending="…">Όλοι διαφορετικοί</SubmitButton>
