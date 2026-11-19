@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { requireProfile } from "@/lib/auth";
+import { isOwnEmail } from "@/lib/own";
 
 const s = (f: FormData, k: string) => {
   const v = f.get(k);
@@ -337,7 +338,11 @@ async function loadReviewEmail(id: string) {
 
 export async function reviewAsLead(f: FormData) {
   const { supabase, profile, isAdmin, em } = await loadReviewEmail(s(f, "id")!);
-  const company = s(f, "company") ?? em.ai_company ?? em.counterpart_name ?? em.counterpart_email;
+  // Αν ο αποστολέας είμαστε εμείς (φόρμα του site), στοιχεία πελάτη είναι μόνο όσα βρήκε η AI στο κείμενο
+  const own = isOwnEmail(em.counterpart_email);
+  const realEmail: string | null = own ? (em.ai_email && !isOwnEmail(em.ai_email) ? em.ai_email : null) : em.counterpart_email;
+  const realName: string | null = own ? em.ai_contact_name : em.counterpart_name;
+  const company = s(f, "company") ?? em.ai_company ?? realName ?? realEmail ?? em.subject;
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   const { data: lead, error } = await supabase
     .from("leads")
@@ -345,7 +350,7 @@ export async function reviewAsLead(f: FormData) {
       company_name: company,
       contact_name: s(f, "contact_name") ?? em.ai_contact_name,
       phone: s(f, "phone") ?? em.ai_phone,
-      email: em.counterpart_email,
+      email: realEmail,
       source: "email",
       next_step: s(f, "next_step") ?? "Πρώτη επαφή (lead από email)",
       next_step_due: s(f, "next_step_due") ?? tomorrow,
@@ -355,7 +360,7 @@ export async function reviewAsLead(f: FormData) {
     .select("id")
     .single();
   if (error || !lead) back("/inbox", { error: friendly(error?.message) });
-  await supabase.from("contacts").insert({ email: em.counterpart_email, name: em.counterpart_name, lead_id: lead!.id, created_by: profile.id });
+  if (realEmail) await supabase.from("contacts").insert({ email: realEmail, name: realName, lead_id: lead!.id, created_by: profile.id });
   await supabase.from("email_messages").update({ status: "lead_created", lead_id: lead!.id, decided_at: new Date().toISOString() }).eq("id", em.id);
   await supabase.from("activities").insert({
     lead_id: lead!.id,
@@ -382,7 +387,7 @@ export async function reviewAsCustomer(f: FormData) {
   if (!customerId) back("/inbox", { error: "Διάλεξε πελάτη" });
   // Μαθαίνει τη διεύθυνση, ώστε την επόμενη φορά να το συνδέσει μόνο του.
   // Τα πρακτορεία στέλνουν για πολλούς πελάτες: εκεί δεν τη «δένουμε» σε έναν.
-  if (s(f, "remember") === "1") {
+  if (s(f, "remember") === "1" && !isOwnEmail(em.counterpart_email)) {
     await supabase.from("contacts").insert({ email: em.counterpart_email, name: em.counterpart_name, customer_id: customerId, created_by: profile.id });
   }
   await supabase.from("email_messages").update({ status: "logged", customer_id: customerId, decided_at: new Date().toISOString() }).eq("id", em.id);

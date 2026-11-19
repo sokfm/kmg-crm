@@ -7,6 +7,7 @@ export type EmailVerdict = {
   company: string | null;
   contact_name: string | null;
   phone: string | null;
+  email: string | null;
   summary: string;
   reason: string;
   tasks: { title: string; due_date: string | null }[];
@@ -19,6 +20,10 @@ const SYSTEM = `Είσαι ο βοηθός πωλήσεων της Kartelias Med
 
 Διαβάζεις ένα email από το γραμματοκιβώτιο ενός στελέχους της KMG και απαντάς ΠΑΝΤΑ με το εργαλείο verdict.
 summary: μία σύντομη πρόταση στα ελληνικά. reason: γιατί, σε μία πρόταση. company: εμπορική ονομασία.
+email: το email του ΠΕΛΑΤΗ/ενδιαφερόμενου όπως γράφεται μέσα στο κείμενο (π.χ. στα πεδία μιας φόρμας επικοινωνίας
+ή σε προωθημένο μήνυμα), αλλιώς null. ΠΟΤΕ διεύθυνση της KMG (@sokfm.gr, @karteliasmediagroup.gr, @lalala.gr).
+Όταν το email είναι φόρμα επικοινωνίας του site ή προώθηση, company/contact_name/phone είναι του ενδιαφερόμενου
+που συμπλήρωσε τη φόρμα — ποτέ της KMG ή του συναδέλφου που το προώθησε (αγνόησε τις υπογραφές της KMG).
 tasks: τι πρέπει να κάνει το στέλεχος της KMG, με due_date σε μορφή YYYY-MM-DD ή null.
 
 kind:
@@ -82,6 +87,7 @@ export async function judgeEmail(input: {
   const v = block.input as EmailVerdict;
   v.tasks = Array.isArray(v.tasks) ? v.tasks.filter((t) => t && t.title).slice(0, 3) : [];
   v.confidence = Number(v.confidence) || 0;
+  v.email = typeof v.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email.trim()) ? v.email.trim().toLowerCase() : null;
   v.summary = v.summary ?? "";
   v.reason = v.reason ?? "";
   return v;
@@ -98,6 +104,7 @@ const VERDICT_TOOL = {
       company: { type: ["string", "null"] },
       contact_name: { type: ["string", "null"] },
       phone: { type: ["string", "null"] },
+      email: { type: ["string", "null"] },
       summary: { type: "string" },
       reason: { type: "string" },
       tasks: {

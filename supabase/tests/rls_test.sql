@@ -378,4 +378,16 @@ do $$ begin
 end $$;
 reset role;
 
+-- 23. Οι δικές μας διευθύνσεις δεν γίνονται στοιχεία πελάτη
+reset role;
+insert into customers (id, display_name, email) values ('a0000000-0000-0000-0000-000000000001','ΤΕΣΤ ΦΟΡΜΑ','Info@KarteliasMediaGroup.gr');
+insert into contacts (customer_id, name, email) values ('a0000000-0000-0000-0000-000000000001','Κάποιος','x@sokfm.gr');
+insert into contacts (customer_id, name, email) values ('a0000000-0000-0000-0000-000000000001','Πελάτης','niki@gmail.com');
+do $$ begin
+  assert (select email from customers where id = 'a0000000-0000-0000-0000-000000000001') is null, 'δικό μας email έμεινε σε πελάτη';
+  assert (select email from contacts where name = 'Κάποιος') is null, 'δικό μας email έμεινε σε πρόσωπο';
+  assert (select email from contacts where name = 'Πελάτης') = 'niki@gmail.com', 'χάθηκε email πελάτη';
+  assert not is_own_email('info@notsokfm.gr'), 'ξένο domain θεωρήθηκε δικό μας';
+end $$;
+
 select 'ALL TESTS PASSED' as result;

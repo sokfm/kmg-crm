@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { graph, refreshAccess, type GraphMessage } from "./microsoft";
 import { judgeEmail, type EmailVerdict } from "./ai";
 import { enrichLead } from "../enrich";
+import { isOwnEmail } from "../own";
 
 // Συγχρονισμός ενός γραμματοκιβωτίου: διαβάζει τα νέα Εισερχόμενα και Απεσταλμένα,
 // γράφει τα email γνωστών πελατών/leads στην καρτέλα τους, φτιάχνει leads όταν η AI
@@ -69,10 +70,13 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
         const { data: seen } = await db.from("email_messages").select("id").eq("user_id", acc.user_id).eq("graph_id", m.id).maybeSingle();
         if (seen) continue;
 
-        const ag = agencyByDomain.get(domainOf(other.email));
-        const match: Match = ag
+        // Δική μας διεύθυνση (φόρμα του site, προώθηση): ο αποστολέας ΔΕΝ είναι ο πελάτης.
+        // Τα στοιχεία του πελάτη τα βρίσκει η AI μέσα στο κείμενο.
+        const ownSender = isOwnEmail(other.email);
+        const ag = ownSender ? undefined : agencyByDomain.get(domainOf(other.email));
+        let match: Match = ag
           ? { customer_id: null, lead_id: null, agency_id: ag.id, label: `πρακτορείο ${ag.name}` }
-          : await findMatch(db, other.email);
+          : ownSender ? null : await findMatch(db, other.email);
         let verdict: EmailVerdict;
         try {
           verdict = await judgeEmail({
@@ -91,13 +95,19 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
             kind: match ? "existing_customer" : isIn ? "new_lead" : "other",
             confidence: 0,
             company: null,
-            contact_name: other.name,
+            contact_name: ownSender ? null : other.name,
             phone: null,
+            email: null,
             summary: (m.bodyPreview ?? "").slice(0, 200),
             reason: `Η AI δεν απάντησε (${e instanceof Error ? e.message.slice(0, 80) : "σφάλμα"}) — έλεγξέ το εσύ.`,
             tasks: [],
           };
         }
+
+        // Το πραγματικό email του πελάτη: του αποστολέα, εκτός αν ο αποστολέας είμαστε εμείς
+        const realEmail = ownSender ? (verdict.email && !isOwnEmail(verdict.email) ? verdict.email : null) : other.email;
+        const realName = ownSender ? verdict.contact_name : (verdict.contact_name ?? other.name);
+        if (ownSender && realEmail) match = await findMatch(db, realEmail);
 
         const base = {
           user_id: acc.user_id,
@@ -113,8 +123,9 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
           ai_confidence: verdict.confidence,
           ai_reason: verdict.reason,
           ai_company: verdict.company,
-          ai_contact_name: verdict.contact_name ?? other.name,
+          ai_contact_name: realName,
           ai_phone: verdict.phone,
+          ai_email: realEmail,
         };
 
         // 1. Γνωστός πελάτης ή lead → στην καρτέλα του
@@ -132,13 +143,13 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
 
         // 2. Σίγουρο νέο lead (μόνο από εισερχόμενα) → νέο lead + ειδοποίηση
         if (isIn && verdict.kind === "new_lead" && verdict.confidence >= LEAD_THRESHOLD) {
-          const company = verdict.company || other.name || other.email;
+          const company = verdict.company || (ownSender ? realName || realEmail || base.subject : other.name || other.email);
           const { data: lead, error } = await db
             .from("leads")
             .insert({
               company_name: company,
-              contact_name: verdict.contact_name ?? other.name,
-              email: other.email,
+              contact_name: realName,
+              email: realEmail,
               phone: verdict.phone,
               source: "email",
               next_step: "Πρώτη επαφή (lead από email)",
@@ -150,7 +161,7 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
             .single();
           if (!error && lead) {
             const target = { customer_id: null, lead_id: lead.id, label: company };
-            await db.from("contacts").insert({ email: other.email, name: other.name, lead_id: lead.id, created_by: acc.user_id });
+            if (realEmail) await db.from("contacts").insert({ email: realEmail, name: realName, lead_id: lead.id, created_by: acc.user_id });
             const { data: em } = await db
               .from("email_messages")
               .insert({ ...base, status: "lead_created", lead_id: lead.id, decided_at: new Date().toISOString() })
