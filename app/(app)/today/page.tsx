@@ -60,7 +60,7 @@ export default async function Today() {
       {isAdmin && (toAssign > 0 || toApprove > 0 || toMerge > 0) && (
         <div className="card alert row">
           {toAssign > 0 && <Link href="/leads?filter=unassigned" className="badge late">{toAssign === 1 ? "1 lead για ανάθεση" : `${toAssign} leads για ανάθεση`}</Link>}
-          {toApprove > 0 && <Link href="/base" className="badge late">{toApprove === 1 ? "1 αίτημα από τη βάση" : `${toApprove} αιτήματα από τη βάση`}</Link>}
+          {toApprove > 0 && <Link href="/customers?status=base" className="badge late">{toApprove === 1 ? "1 αίτημα από τη βάση" : `${toApprove} αιτήματα από τη βάση`}</Link>}
           {toMerge > 0 && <Link href="/merges" className="badge gray">{toMerge === 1 ? "1 ομάδα πελατών για έλεγχο" : `${toMerge} ομάδες πελατών για έλεγχο`}</Link>}
         </div>
       )}

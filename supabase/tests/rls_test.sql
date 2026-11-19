@@ -250,4 +250,34 @@ do $$ begin
 end $$;
 reset role;
 
+-- 16. Ένωση με το χέρι: μεταφέρονται email επαφών, εργασίες, κατάσταση, όνομα
+reset role;
+insert into customers (id, display_name, lifetime_revenue, status, owner_id) values
+ ('60000000-0000-0000-0000-000000000001','ΦΟΥΡΝΟΣ ΠΑΠΑΣ',300,'base',null),
+ ('60000000-0000-0000-0000-000000000002','ΑΡΤΟΠΟΙΕΙΟ ΠΑΠΑ',100,'active','00000000-0000-0000-0000-000000000003');
+insert into contacts (email, customer_id) values ('info@papas.gr','60000000-0000-0000-0000-000000000002');
+insert into tasks (title, owner_id, customer_id) values ('Κλήση Παπά','00000000-0000-0000-0000-000000000003','60000000-0000-0000-0000-000000000002');
+select as_user(4);
+insert into base_claims (customer_id) values ('60000000-0000-0000-0000-000000000001');
+select as_user(3);
+do $$ begin
+  begin
+    perform merge_customers_manual(array['60000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000002']::uuid[]);
+    assert false, 'πωλητής ένωσε πελάτες';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+select as_user(1);
+select merge_customers_manual(array['60000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000002']::uuid[],
+  '60000000-0000-0000-0000-000000000002', null);
+reset role;
+do $$ begin
+  assert (select count(*) from customers where id::text like '60000000%') = 1, 'δεν ενώθηκαν';
+  assert (select display_name from customers where id='60000000-0000-0000-0000-000000000001') = 'ΑΡΤΟΠΟΙΕΙΟ ΠΑΠΑ', 'λάθος όνομα';
+  assert (select status from customers where id='60000000-0000-0000-0000-000000000001') = 'active', 'δεν έμεινε ενεργός';
+  assert (select owner_id from customers where id='60000000-0000-0000-0000-000000000001') = '00000000-0000-0000-0000-000000000003', 'χάθηκε ο υπεύθυνος';
+  assert (select customer_id from contacts where email='info@papas.gr') = '60000000-0000-0000-0000-000000000001', 'χάθηκε η διεύθυνση email';
+  assert (select customer_id from tasks where title='Κλήση Παπά') = '60000000-0000-0000-0000-000000000001', 'χάθηκε η εργασία';
+end $$;
+
 select 'ALL TESTS PASSED' as result;

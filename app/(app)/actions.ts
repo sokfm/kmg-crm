@@ -172,9 +172,11 @@ export async function claimCustomer(f: FormData) {
   const customerId = s(f, "customer_id")!;
   const forUser = isAdmin ? s(f, "for_user") ?? profile.id : profile.id;
   const { error } = await supabase.from("base_claims").insert({ customer_id: customerId, for_user: forUser, note: s(f, "note") });
-  revalidatePath("/base");
-  if (error) back("/base", { error: friendly(error.message), q: s(f, "q") ?? "" });
-  back("/base", { ok: isAdmin ? "assigned" : "requested", q: s(f, "q") ?? "" });
+  revalidatePath("/customers");
+  const ret = s(f, "back")?.startsWith("/customers") ? s(f, "back")!.split("?")[0] : "/customers";
+  const keep = Object.fromEntries(new URLSearchParams(s(f, "back")?.split("?")[1] ?? "status=base"));
+  if (error) back(ret, { ...keep, error: friendly(error.message) });
+  back(ret, { ...keep, ok: isAdmin ? "assigned" : "requested" });
 }
 
 export async function decideClaim(f: FormData) {
@@ -182,9 +184,9 @@ export async function decideClaim(f: FormData) {
   const id = s(f, "id")!;
   const approve = s(f, "decision") === "approve";
   const { error } = await supabase.from("base_claims").update({ status: approve ? "approved" : "rejected" }).eq("id", id);
-  revalidatePath("/base");
-  if (error) back("/base", { error: friendly(error.message) });
-  back("/base", { ok: approve ? "approved" : "rejected" });
+  revalidatePath("/customers");
+  if (error) back("/customers", { status: "base", error: friendly(error.message) });
+  back("/customers", { status: "base", ok: approve ? "approved" : "rejected" });
 }
 
 // ---------- Ενώσεις πελατών ----------
@@ -208,6 +210,16 @@ export async function renameCustomer(f: FormData) {
   revalidatePath(`/customers/${id}`);
   if (error) back(`/customers/${id}`, { error: friendly(error.message) });
   back(`/customers/${id}`, { ok: "saved" });
+}
+
+// Ένωση πελατών με το χέρι (από τη λίστα πελατών)
+export async function mergeCustomers(f: FormData) {
+  const { supabase } = await requireProfile();
+  const ids = f.getAll("ids").map(String);
+  const { data, error } = await supabase.rpc("merge_customers_manual", { p_ids: ids, p_keep: s(f, "keep_id"), p_name: s(f, "keep_name") });
+  revalidatePath("/customers");
+  if (error) back("/customers/merge", { ids: ids.join(","), error: friendly(error.message) });
+  redirect(`/customers/${data}?ok=merged`);
 }
 
 export async function mergeSelected(f: FormData) {
