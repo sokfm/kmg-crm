@@ -32,8 +32,15 @@ export default async function Pricing({ searchParams }: { searchParams: Promise<
   const { supabase, isAdmin } = await requireProfile();
   const { data } = await supabase.from("price_packages").select("*").order("sort").order("name");
   const all = (data ?? []) as Pkg[];
-  const pkgs = all.filter((p) => isAdmin || p.active);
+  const client = sp.c === "local" || sp.c === "media" ? sp.c : null;
+  const pkgs = all.filter((p) => (isAdmin || p.active) && (!client || p.client_type === client || p.client_type === "all"));
   const station = STATIONS.includes(sp.s) ? sp.s : null;
+  const link = (s: string | null, c: string | null) => {
+    const q = new URLSearchParams();
+    if (s) q.set("s", s);
+    if (c) q.set("c", c);
+    return `/pricing${q.size ? `?${q}` : ""}`;
+  };
   const shown = STATIONS.filter((s) => !station || s === station);
 
   return (
@@ -47,8 +54,14 @@ export default async function Pricing({ searchParams }: { searchParams: Promise<
       </p>
 
       <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-        <a className={`chip ${!station ? "on" : ""}`} href="/pricing">Όλοι οι σταθμοί</a>
-        {STATIONS.map((s) => <a key={s} className={`chip ${station === s ? "on" : ""}`} href={`/pricing?s=${encodeURIComponent(s)}`}>{s}</a>)}
+        <a className={`chip ${!station ? "on" : ""}`} href={link(null, client)}>Όλοι οι σταθμοί</a>
+        {STATIONS.map((s) => <a key={s} className={`chip ${station === s ? "on" : ""}`} href={link(s, client)}>{s}</a>)}
+      </div>
+      <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+        <span className="muted" style={{ fontSize: 13 }}>Πελάτης:</span>
+        <a className={`chip ${!client ? "on" : ""}`} href={link(station, null)}>Όλα</a>
+        <a className={`chip ${client === "local" ? "on" : ""}`} href={link(station, "local")}>Τοπικός</a>
+        <a className={`chip ${client === "media" ? "on" : ""}`} href={link(station, "media")}>Media shop</a>
       </div>
 
       {shown.map((st) => {
