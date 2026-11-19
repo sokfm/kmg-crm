@@ -304,3 +304,5 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 /* Τίποτα στο περιεχόμενο δεν σπρώχνει τη σελίδα στο πλάι (κόβει το πλαϊνό μενού) */
 .shell { overflow-x: clip; }
 .content { overflow-x: clip; }
+.badge.onair { background: var(--brand-grad); color: #0b0a0d; }
+.badge.faint { background: #f6f5f8; color: #8a8492; border: 1px solid #ebe8ef; }

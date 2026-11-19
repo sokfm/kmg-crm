@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
-import { CHANNEL, customerState, eur, periodGr } from "@/lib/format";
+import { CHANNEL, customerState, eur, monthsAgo, periodGr } from "@/lib/format";
 import { claimCustomer, decideClaim } from "../actions";
 import { Flash } from "@/components/Flash";
 
@@ -21,7 +21,7 @@ type Row = {
 export default async function Customers({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const { supabase, isAdmin, isCeo, profile } = await requireProfile();
-  const status = ["all", "onair", "renew", "active", "base", "mine", "closed"].includes(sp.status) ? sp.status : isAdmin ? "all" : "mine";
+  const status = ["all", "onair", "recent", "inactive", "dormant", "base", "mine", "closed"].includes(sp.status) ? sp.status : isAdmin ? "all" : "mine";
   const year = sp.year ?? "";
   const sort = SORTS[sp.sort] ? sp.sort : "last";
   const page = Math.max(0, Number(sp.page) || 0);
@@ -35,10 +35,10 @@ export default async function Customers({ searchParams }: { searchParams: Promis
     .range(page * PAGE, page * PAGE + PAGE - 1);
   if (status === "closed") q = q.not("closed_at", "is", null);
   else q = q.is("closed_at", null);
-  const cur = new Date().toISOString().slice(0, 7);
-  if (status === "onair") q = q.gte("last_period", cur);
-  if (status === "renew") q = q.eq("status", "active").lt("last_period", cur);
-  if (status === "active") q = q.eq("status", "active");
+  if (status === "onair") q = q.gte("last_period", monthsAgo(0));
+  if (status === "recent") q = q.gte("last_period", monthsAgo(12)).lt("last_period", monthsAgo(0));
+  if (status === "inactive") q = q.gte("last_period", monthsAgo(36)).lt("last_period", monthsAgo(12));
+  if (status === "dormant") q = q.or(`last_period.lt.${monthsAgo(36)},last_period.is.null`);
   if (status === "base") q = q.eq("status", "base");
   if (status === "mine") q = q.eq("owner_id", profile.id);
   if (year === "never") q = q.is("last_period", null);
@@ -88,8 +88,10 @@ export default async function Customers({ searchParams }: { searchParams: Promis
         </div>
         <div className="row">
           {isAdmin && chip("all", "Όλοι")}
-          {chip("onair", "Παίζουν τώρα")}
-          {chip("renew", "Για ανανέωση")}
+          {chip("onair", "On Air")}
+          {chip("recent", "Recent · 12 μήνες")}
+          {chip("inactive", "Inactive · 1–3 χρόνια")}
+          {chip("dormant", "Dormant · 3+ χρόνια")}
           {chip("base", "Βάση (χωρίς υπεύθυνο)")}
           {chip("mine", "Οι δικοί μου")}
           {isAdmin && chip("closed", "Κλειστές επιχειρήσεις")}

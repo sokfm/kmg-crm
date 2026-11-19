@@ -46,13 +46,20 @@ export function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Κατάσταση πελάτη όπως τη λέμε στην πράξη:
-// «Παίζει» = έχει καμπάνια αυτόν τον μήνα ή αργότερα· «Για ανανέωση» = έχει πωλητή αλλά η καμπάνια τελείωσε·
-// «Βάση» = χωρίς πωλητή· «Κλειστή» = η επιχείρηση έκλεισε.
-export function customerState(c: { status: string; last_period: string | null; closed_at?: string | null }): { label: string; cls: string } {
-  if (c.closed_at) return { label: "Κλειστή", cls: "gray" };
-  const cur = new Date().toISOString().slice(0, 7);
-  if (c.last_period && c.last_period >= cur) return { label: "Παίζει", cls: "good" };
-  if (c.status === "active") return { label: "Για ανανέωση", cls: "late" };
-  return { label: "Βάση", cls: "gray" };
+// Κατάσταση πελάτη με βάση πότε έπαιξε τελευταία:
+// On Air = καμπάνια αυτόν τον μήνα ή κλεισμένη για αργότερα · Recent = έπαιξε τους τελευταίους 12 μήνες (στόχος ανανέωσης)
+// Inactive = 1–3 χρόνια πριν · Dormant = πάνω από 3 χρόνια · Κλειστή = η επιχείρηση έκλεισε.
+export const monthsAgo = (n: number) => {
+  const d = new Date();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - n);
+  return d.toISOString().slice(0, 7);
+};
+export function customerState(c: { last_period: string | null; closed_at?: string | null }): { key: string; label: string; cls: string } {
+  if (c.closed_at) return { key: "closed", label: "Κλειστή", cls: "gray" };
+  const p = c.last_period;
+  if (p && p >= monthsAgo(0)) return { key: "onair", label: "On Air", cls: "onair" };
+  if (p && p >= monthsAgo(12)) return { key: "recent", label: "Recent", cls: "late" };
+  if (p && p >= monthsAgo(36)) return { key: "inactive", label: "Inactive", cls: "gray" };
+  return { key: "dormant", label: p ? "Dormant" : "Χωρίς καμπάνια", cls: "faint" };
 }
