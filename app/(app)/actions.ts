@@ -21,23 +21,42 @@ const back = (path: string, params: Record<string, string>) =>
 // ---------- Leads ----------
 
 export async function createLead(f: FormData) {
-  const { supabase } = await requireProfile();
+  const { supabase, profile, isAdmin } = await requireProfile();
   const company = s(f, "company_name");
   if (!company) back("/leads/new", { error: "Γράψε όνομα επιχείρησης" });
 
-  // Έλεγχος διπλοεγγραφής πριν την καταχώριση (εκτός αν ο χρήστης επιβεβαίωσε)
-  if (!s(f, "confirm_duplicate")) {
+  // Έλεγχος διπλοεγγραφής πριν την καταχώριση (εκτός αν ο χρήστης απάντησε ήδη)
+  const dupAction = s(f, "dup_action"); // "same" = ίδιος πελάτης, "different" = άλλη επιχείρηση
+  if (!dupAction) {
     const { data: dups } = await supabase.rpc("find_duplicate", { p_name: company, p_phone: s(f, "phone") });
     if (dups && dups.length) {
-      const d = dups[0] as { kind: string; display_name: string; owner_name: string };
-      const params: Record<string, string> = {
-        dup: `${d.display_name} — ${d.kind === "customer" ? "πελάτης" : "lead"} του/της ${d.owner_name}`,
-      };
-      for (const k of ["company_name", "contact_name", "phone", "email", "area", "source", "product_line", "next_step", "next_step_due", "notes"]) {
+      const d = dups[0] as { kind: string; ref_id: string; display_name: string; owner_name: string };
+      const params: Record<string, string> = { dup_kind: d.kind, dup_id: d.ref_id, dup_name: d.display_name, dup_owner: d.owner_name };
+      for (const k of ["company_name", "contact_name", "phone", "email", "area", "source", "product_line", "market", "owner_id", "next_step", "next_step_due", "expected_value", "notes"]) {
         const v = s(f, k);
         if (v) params[k] = v;
       }
+      const st = f.getAll("stations").map(String);
+      if (st.length) params.stations = st.join(",");
       back("/leads/new", params);
+    }
+  }
+
+  // «Είναι ο ίδιος πελάτης»: το lead συνδέεται με την υπάρχουσα καρτέλα πελάτη
+  let customerId: string | null = null;
+  if (dupAction === "same" && s(f, "dup_kind") === "customer") {
+    const { data: c } = await supabase.from("customers").select("id, owner_id, status").eq("id", s(f, "dup_id")!).maybeSingle();
+    if (c) {
+      customerId = c.id;
+      if (!c.owner_id) {
+        if (isAdmin) {
+          // Ο Νίκος/Γιάννα: ο πελάτης της βάσης περνά στον πωλητή του lead (ή σε σένα)
+          await supabase.from("customers").update({ owner_id: s(f, "owner_id") ?? profile.id }).eq("id", c.id);
+        } else {
+          // Πωλητής: αίτημα για τον πελάτη της βάσης (το εγκρίνει ο Νίκος)
+          await supabase.from("base_claims").insert({ customer_id: c.id, for_user: profile.id, note: "Από νέο lead" });
+        }
+      }
     }
   }
 
@@ -58,6 +77,7 @@ export async function createLead(f: FormData) {
       notes: s(f, "notes"),
       owner_id: s(f, "owner_id"),
       expected_value: money(s(f, "expected_value")),
+      customer_id: customerId,
     })
     .select("id")
     .single();

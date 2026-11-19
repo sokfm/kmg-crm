@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { SubmitButton } from "@/components/SubmitButton";
 import { createLead } from "../../actions";
@@ -20,14 +21,35 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
     <main className="wrap" style={{ maxWidth: 640 }}>
       <h1>Νέο lead</h1>
       <Flash sp={sp} />
-      {sp.dup && (
-        <div className="card alert">
-          <strong>Μοιάζει να υπάρχει ήδη:</strong> {sp.dup}.
-          <div className="muted">Αν είναι άλλη επιχείρηση, πάτα «Καταχώριση» ξανά. Αν είναι ο ίδιος, μίλα πρώτα με τον υπεύθυνο.</div>
+      {sp.dup_kind && (
+        <div className="card alert stack" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {sp.dup_kind === "customer" ? (
+            <>
+              <div>
+                <strong>Υπάρχει ήδη πελάτης «{sp.dup_name}»</strong>{" "}
+                <span className="muted">({sp.dup_owner === "Βάση πελατών" ? "στη βάση, χωρίς υπεύθυνο" : `υπεύθυνος: ${sp.dup_owner}`})</span>
+              </div>
+              <div className="muted">Είναι ο ίδιος; Τότε το lead μπαίνει στην καρτέλα του, με όλο το ιστορικό του.{sp.dup_owner === "Βάση πελατών" ? (isAdmin ? " Ο πελάτης βγαίνει από τη βάση και περνά σε όποιον αναθέσεις το lead (ή σε σένα)." : " Θα σταλεί και αίτημα στον Νίκο να σου δοθεί ο πελάτης.") : ""}</div>
+              <div className="row">
+                <SubmitButton name="dup_action" value="same" form="leadform">Ναι, είναι ο ίδιος</SubmitButton>
+                <SubmitButton name="dup_action" value="different" form="leadform" className="secondary">Όχι, άλλη επιχείρηση</SubmitButton>
+                {(isAdmin || sp.dup_owner === "Βάση πελατών") && <Link href={`/customers/${sp.dup_id}`} target="_blank">Δες την καρτέλα ↗</Link>}
+              </div>
+            </>
+          ) : (
+            <>
+              <div><strong>Υπάρχει ήδη ανοιχτό lead «{sp.dup_name}»</strong> <span className="muted">({sp.dup_owner})</span></div>
+              <div className="muted">Αν είναι η ίδια επιχείρηση, συνέχισε στο υπάρχον lead για να μη γίνουν δύο.</div>
+              <div className="row">
+                {isAdmin && <Link className="btn" href={`/leads/${sp.dup_id}`}>Άνοιξε το υπάρχον lead</Link>}
+                <SubmitButton name="dup_action" value="different" form="leadform" className="secondary">Είναι άλλη επιχείρηση, καταχώριση</SubmitButton>
+              </div>
+            </>
+          )}
         </div>
       )}
-      <form action={createLead} className="stack card">
-        {sp.dup && <input type="hidden" name="confirm_duplicate" value="1" />}
+      <form action={createLead} id="leadform" className="stack card">
+        {sp.dup_kind && <><input type="hidden" name="dup_kind" value={sp.dup_kind} /><input type="hidden" name="dup_id" value={sp.dup_id} /></>}
         <label>Επιχείρηση *<input name="company_name" required defaultValue={sp.company_name} placeholder="π.χ. Φούρνος Παπαδόπουλος" /></label>
         <div className="grid2">
           <label>Υπεύθυνος επικοινωνίας<input name="contact_name" defaultValue={sp.contact_name} /></label>
@@ -50,14 +72,14 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
             </select>
           </label>
           <label>Αγορά
-            <select name="market" defaultValue="chalkida">
+            <select name="market" defaultValue={sp.market ?? "chalkida"}>
               <option value="chalkida">Χαλκίδα / Εύβοια</option>
               <option value="athens">Αθήνα</option>
             </select>
           </label>
           {isAdmin && (
             <label>Ανάθεση σε
-              <select name="owner_id" defaultValue="">
+              <select name="owner_id" defaultValue={sp.owner_id ?? ""}>
                 <option value="">Αργότερα</option>
                 {people!.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
               </select>
@@ -67,7 +89,7 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
         <fieldset className="row" style={{ border: 0, padding: 0 }}>
           {STATIONS.map((st) => (
             <label key={st} className="row" style={{ flexDirection: "row", fontWeight: 400 }}>
-              <input type="checkbox" name="stations" value={st} /> {st}
+              <input type="checkbox" name="stations" value={st} defaultChecked={(sp.stations ?? "").split(",").includes(st)} /> {st}
             </label>
           ))}
         </fieldset>
@@ -75,10 +97,10 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
           <label>Επόμενο βήμα *<input name="next_step" required defaultValue={sp.next_step} placeholder="π.χ. Τηλέφωνο για ραντεβού" /></label>
           <label>Πότε *<input name="next_step_due" type="date" required defaultValue={sp.next_step_due ?? tomorrow} /></label>
         </div>
-        <label>Εκτιμώμενη αξία (€, αν την ξέρεις)<input name="expected_value" inputMode="decimal" placeholder="π.χ. 1.500" /></label>
+        <label>Εκτιμώμενη αξία (€, αν την ξέρεις)<input name="expected_value" inputMode="decimal" placeholder="π.χ. 1.500" defaultValue={sp.expected_value} /></label>
         <label>Σημειώσεις<textarea name="notes" defaultValue={sp.notes} /></label>
         {!isAdmin && <p className="muted">Αν το βρήκες εσύ, μένει σε σένα. Αλλιώς πάει στον Νίκο για ανάθεση. Τα digital πάνε στη Μαρία.</p>}
-        <SubmitButton>Καταχώριση</SubmitButton>
+        {sp.dup_kind ? <p className="muted" style={{ margin: 0 }}>Απάντησε επάνω: είναι ο ίδιος ή άλλη επιχείρηση;</p> : <SubmitButton>Καταχώριση</SubmitButton>}
       </form>
     </main>
   );
