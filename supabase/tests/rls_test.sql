@@ -366,4 +366,16 @@ do $$ begin
 end $$;
 reset role;
 
+-- 22. Ακροατές ανά μισάωρο: 37 μισάωρα ανά σταθμό, όλοι βλέπουν, μόνο admin αλλάζει
+select as_user(3);
+update station_slots set listeners_k = 99 where station = 'ΣΟΚ FM' and slot = '08:30';
+do $$ begin
+  assert (select count(*) from station_slots where station = 'ΣΟΚ FM') = 37, 'λείπουν μισάωρα';
+  assert (select listeners_k from station_slots where station = 'ΣΟΚ FM' and slot = '08:30') = 12, 'πωλητής άλλαξε ακροατές';
+  -- Έλεγχος με το Excel: 6 σποτ/ημέρα στα μισάωρα του πλάνου ΣΟΚ, 30 μέρες, τοπική τιμή = 783 €
+  assert (select round(sum(listeners_k) * 0.015 * 30 * 30, 2) from station_slots
+          where station = 'ΣΟΚ FM' and slot in ('08:30','10:30','12:30','14:30','16:30','18:30')) = 783, 'η κοστολόγηση δεν βγάζει 783 €';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

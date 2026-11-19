@@ -50,7 +50,10 @@ export default async function Pricing({ searchParams }: { searchParams: Promise<
 
   return (
     <main className="wrap" style={{ maxWidth: 1000 }}>
-      <h1>Τιμοκατάλογος</h1>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+        <h1>Τιμοκατάλογος</h1>
+        <a href="/pricing/plan" className="btn">Κοστολόγηση πλάνου →</a>
+      </div>
       <Flash sp={sp} />
       <p className="muted" style={{ marginTop: 0 }}>
         Όλες οι τιμές είναι <strong>χωρίς ΦΠΑ</strong>, για σποτ έως 30&apos;&apos;. Ελάχιστη διάρκεια 1 μήνας.
