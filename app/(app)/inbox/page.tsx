@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { dateGr } from "@/lib/format";
 import { Flash } from "@/components/Flash";
@@ -85,7 +86,7 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<Re
                   </label>
                 )}
               </div>
-              <button type="submit">Δημιουργία lead</button>
+              <SubmitButton>Δημιουργία lead</SubmitButton>
             </form>
           </details>
 
@@ -105,12 +106,12 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<Re
                 <input type="checkbox" name="remember" value="1" defaultChecked={e.ai_kind !== "agency"} />
                 Να θυμάσαι αυτή τη διεύθυνση για αυτόν τον πελάτη {e.ai_kind === "agency" && "(όχι για πρακτορεία που στέλνουν για πολλούς)"}
               </label>
-              {candidates[e.id].length > 0 && <button type="submit">Σύνδεση με τον πελάτη</button>}
+              {candidates[e.id].length > 0 && <SubmitButton>Σύνδεση με τον πελάτη</SubmitButton>}
             </form>
             <form className="row" style={{ marginTop: 8 }}>
               <input type="hidden" name="find" value={e.id} />
               <input name="q" placeholder="Αναζήτηση πελάτη…" defaultValue={sp.find === e.id ? sp.q : ""} className="grow" />
-              <button type="submit" className="secondary">Αναζήτηση</button>
+              <SubmitButton className="secondary">Αναζήτηση</SubmitButton>
             </form>
           </details>
 

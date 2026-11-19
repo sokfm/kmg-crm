@@ -1,5 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { Flash } from "@/components/Flash";
+import { SubmitButton } from "@/components/SubmitButton";
 import { disconnectOutlook, syncMailNow } from "../actions";
 
 export const maxDuration = 300;
@@ -36,8 +37,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             {acc.last_error && <div className="msg error">Τελευταίο σφάλμα: {acc.last_error}</div>}
             <div className="muted">Τελευταίες 7 μέρες: {logged} email σε καρτέλες · {leads} νέα leads · {review} προς έλεγχο</div>
             <div className="row">
-              <form action={syncMailNow}><button type="submit">Έλεγχος τώρα</button></form>
-              <form action={disconnectOutlook}><button type="submit" className="danger">Αποσύνδεση</button></form>
+              <form action={syncMailNow}><SubmitButton pending="Γίνεται έλεγχος των email…" hint="Διαβάζει και ταξινομεί τα email. Μπορεί να πάρει 1–2 λεπτά — μην κλείσεις τη σελίδα.">Έλεγχος τώρα</SubmitButton></form>
+              <form action={disconnectOutlook}><SubmitButton className="danger" pending="Αποσύνδεση…">Αποσύνδεση</SubmitButton></form>
             </div>
           </>
         ) : (

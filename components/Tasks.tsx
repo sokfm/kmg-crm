@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { completeTask, createTask } from "@/app/(app)/actions";
 import { dateGr, today } from "@/lib/format";
 
@@ -75,7 +76,7 @@ export function NewTaskForm({
           {people.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
         </select>
       )}
-      <button type="submit">Προσθήκη</button>
+      <SubmitButton>Προσθήκη</SubmitButton>
     </form>
   );
 }

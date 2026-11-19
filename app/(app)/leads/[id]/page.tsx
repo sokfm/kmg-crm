@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, LOST_KINDS, STAGES, dateGr } from "@/lib/format";
@@ -58,7 +59,7 @@ export default async function LeadPage({
             <label>Πότε<input name="next_step_due" type="date" defaultValue={in3} /></label>
           </div>
           <p className="muted">Η «Σημείωση» δεν μετράει ως επαφή. Μόνο κλήση, ραντεβού, Viber και email.</p>
-          <button type="submit">Καταγραφή</button>
+          <SubmitButton>Καταγραφή</SubmitButton>
         </form>
       </div>
 
@@ -102,7 +103,7 @@ export default async function LeadPage({
           <label>Γιατί χάθηκε (με δικά σου λόγια)<input name="lost_reason" defaultValue={lead.lost_reason ?? ""} /></label>
           <label>Σημειώσεις<textarea name="notes" defaultValue={lead.notes ?? ""} /></label>
           <p className="muted">Ακόμα και ένα «όχι τώρα» κρατάει επόμενο βήμα: πότε ξαναχτυπάμε την πόρτα.</p>
-          <button type="submit">Αποθήκευση</button>
+          <SubmitButton>Αποθήκευση</SubmitButton>
         </form>
       </div>
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { CHANNEL, eur, periodGr } from "@/lib/format";
 
@@ -26,7 +27,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
       <p className="muted">{rows.length} πελάτες που έπαιξαν από το 2025 και μετά. Οι παλαιότεροι είναι στη <Link href="/base">βάση</Link>.</p>
       <form className="row">
         <input name="q" defaultValue={sp.q} placeholder="Αναζήτηση…" className="grow" />
-        <button type="submit" className="secondary">Αναζήτηση</button>
+        <SubmitButton className="secondary">Αναζήτηση</SubmitButton>
       </form>
       <div className="list">
         {rows.map((c) => (

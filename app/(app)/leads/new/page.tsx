@@ -1,4 +1,5 @@
 import { requireProfile } from "@/lib/auth";
+import { SubmitButton } from "@/components/SubmitButton";
 import { createLead } from "../../actions";
 import { Flash } from "@/components/Flash";
 
@@ -73,7 +74,7 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
         </div>
         <label>Σημειώσεις<textarea name="notes" defaultValue={sp.notes} /></label>
         {!isAdmin && <p className="muted">Αν το βρήκες εσύ, μένει σε σένα. Αλλιώς πάει στον Νίκο για ανάθεση. Τα digital πάνε στη Μαρία.</p>}
-        <button type="submit">Καταχώριση</button>
+        <SubmitButton>Καταχώριση</SubmitButton>
       </form>
     </main>
   );

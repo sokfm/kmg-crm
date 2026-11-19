@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { SubmitButton } from "@/components/SubmitButton";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -45,7 +46,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<Re
             Κωδικός από το email
             <input name="token" inputMode="numeric" autoComplete="one-time-code" required placeholder="123456" />
           </label>
-          <button type="submit">Μπες</button>
+          <SubmitButton>Μπες</SubmitButton>
         </form>
       ) : null}
 

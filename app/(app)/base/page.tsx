@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { eur, periodGr } from "@/lib/format";
 import { claimCustomer, decideClaim } from "../actions";
@@ -57,7 +58,7 @@ export default async function Base({ searchParams }: { searchParams: Promise<Rec
 
       <form className="row">
         <input name="q" defaultValue={sp.q} placeholder="Ψάξε πελάτη ή κατηγορία…" className="grow" />
-        <button type="submit" className="secondary">Αναζήτηση</button>
+        <SubmitButton className="secondary">Αναζήτηση</SubmitButton>
       </form>
       {!sp.q && <div className="section-label muted">ΟΙ ΜΕΓΑΛΥΤΕΡΟΙ ΣΕ ΤΖΙΡΟ</div>}
 
@@ -77,10 +78,10 @@ export default async function Base({ searchParams }: { searchParams: Promise<Rec
                     <option value="" disabled>Ανάθεση σε…</option>
                     {people!.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
                   </select>
-                  <button type="submit">OK</button>
+                  <SubmitButton>OK</SubmitButton>
                 </>
               ) : (
-                <button type="submit" className="secondary">Ζήτα τον</button>
+                <SubmitButton className="secondary">Ζήτα τον</SubmitButton>
               )}
             </form>
           </div>

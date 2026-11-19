@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr } from "@/lib/format";
@@ -81,7 +82,7 @@ export default async function CustomerPage({
             {Object.entries(ACTIVITY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           <input name="summary" className="grow" placeholder="Τι ειπώθηκε;" required />
-          <button type="submit">Καταγραφή</button>
+          <SubmitButton>Καταγραφή</SubmitButton>
         </form>
         {acts && acts.length > 0 && (
           <table style={{ marginTop: 10 }}>

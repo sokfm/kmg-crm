@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { STAGES, dateGr, today } from "@/lib/format";
 import { assignLead } from "../actions";
@@ -59,7 +60,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<Re
                     <option value="" disabled>Ανάθεση σε…</option>
                     {people!.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
                   </select>
-                  <button type="submit">OK</button>
+                  <SubmitButton>OK</SubmitButton>
                 </form>
               ) : (
                 <span className={`badge ${late ? "late" : r.status === "won" ? "good" : ""}`}>{dateGr(r.next_step_due)}</span>

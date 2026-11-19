@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { dateGr } from "@/lib/format";
 import { markAllRead } from "../actions";
@@ -17,7 +18,7 @@ export default async function Notifications() {
       <div className="row">
         <h1 className="grow">Ειδοποιήσεις</h1>
         {rows.some((r) => !r.read_at) && (
-          <form action={markAllRead}><button type="submit" className="secondary">Τα διάβασα όλα</button></form>
+          <form action={markAllRead}><SubmitButton className="secondary">Τα διάβασα όλα</SubmitButton></form>
         )}
       </div>
       {rows.length === 0 && <p className="muted">Καμία ειδοποίηση.</p>}
