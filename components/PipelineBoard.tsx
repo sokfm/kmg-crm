@@ -6,7 +6,7 @@ import { MoveDialog } from "@/components/MoveDialog";
 
 export type Card = {
   id: string; version: number; company_name: string; status: string; next_step: string | null; next_step_due: string | null;
-  expected_value: number | null; product_line: string; stations: string[]; owner: string | null; last_contact: string | null;
+  expected_value: number | null; product_line: string; interests: string[]; stations: string[]; owner: string | null; color: string | null; last_contact: string | null;
 };
 
 const OPEN = [
@@ -58,20 +58,22 @@ export function PipelineBoard({ cards, today, wonMonth, lostMonth }: { cards: Ca
                 const stale = days == null || days >= 14;
                 const ini = (c.owner ?? "").split(" ").map((w) => w[0]).slice(0, 2).join("");
                 return (
-                  <article key={c.id} className={`deal ${late ? "late" : ""}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", c.id)}>
-                    <div className="deal-top">
-                      <Link href={`/leads/${c.id}`} className="title">{c.company_name}</Link>
-                      {c.expected_value ? <span className="val">{eur(Number(c.expected_value))}</span> : null}
+                  <article key={c.id} className="deal" style={{ borderLeft: `5px solid ${c.color ?? "#c9c3d0"}` }} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", c.id)}>
+                    <div className="deal-top" style={{ flexWrap: "wrap", alignItems: "center" }}>
+                      <span className="val" style={{ fontSize: 17, fontWeight: 800 }}>{c.expected_value ? eur(Number(c.expected_value)) : <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>χωρίς μπάτζετ</span>}</span>
+                      <span className="grow" />
+                      {late && <span className="badge late" style={{ fontSize: 11 }}>καθυστερεί</span>}
                     </div>
+                    <Link href={`/leads/${c.id}`} className="title">{c.company_name}</Link>
                     <div className={`next ${late ? "late" : ""}`}>
                       → {c.next_step ?? "—"}{c.next_step_due ? ` · ${day(c.next_step_due)}` : ""}
                     </div>
                     <div className="deal-foot">
-                      {c.product_line === "digital" && <span className="tag dig">digital</span>}
+                      {c.interests.includes("digital") && <span className="tag dig">{c.interests.includes("radio") ? "+ digital" : "digital"}</span>}
                       {c.stations.map((st) => <span key={st} className="tag">{st}</span>)}
                       <span className="grow" />
                       {stale && <span className="stale">{days == null ? "καμία επαφή" : `${days} μέρες χωρίς επαφή`}</span>}
-                      {ini ? <span className="own" title={c.owner ?? ""}>{ini}</span> : <span className="own none" title="Χωρίς ανάθεση">?</span>}
+                      {ini ? <span className="own" title={c.owner ?? ""} style={c.color ? { background: c.color, color: "#fff" } : undefined}>{ini}</span> : <span className="own none" title="Χωρίς ανάθεση">?</span>}
                     </div>
                     <button type="button" className="secondary mv" onClick={() => setMove({ card: c, to: OPEN[Math.min(OPEN.findIndex(([k]) => k === c.status) + 1, OPEN.length - 1)][0] })}>
                       Μετακίνηση ›

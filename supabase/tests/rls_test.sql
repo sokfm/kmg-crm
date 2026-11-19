@@ -441,4 +441,20 @@ do $$ begin
   assert (select count(*) from proposals where lead_id = 'b0000000-0000-0000-0000-000000000001' and is_main) = 1, 'πάνω από μία κύρια';
 end $$;
 
+-- 26. Radio + Digital: ο υπεύθυνος digital παίρνει ειδοποίηση και εργασία, και βλέπει το lead
+select as_user(1);
+insert into leads (id, company_name, owner_id, next_step, next_step_due) values ('c0000000-0000-0000-0000-000000000001','ΤΕΣΤ DIGITAL','00000000-0000-0000-0000-000000000003','x', current_date + 1);
+select as_user(3);
+update leads set interests = '{radio,digital}' where id = 'c0000000-0000-0000-0000-000000000001';
+reset role;
+do $$ begin
+  assert (select count(*) from notifications where kind = 'lead_wants_digital' and link = '/leads/c0000000-0000-0000-0000-000000000001') = 1, 'δεν έφυγε ειδοποίηση digital';
+  assert (select count(*) from tasks where lead_id = 'c0000000-0000-0000-0000-000000000001' and owner_id = '00000000-0000-0000-0000-000000000004') = 1, 'δεν φτιάχτηκε εργασία digital';
+end $$;
+select as_user(4);
+do $$ begin
+  assert (select count(*) from leads where id = 'c0000000-0000-0000-0000-000000000001') = 1, 'η υπεύθυνη digital δεν βλέπει το lead';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;
