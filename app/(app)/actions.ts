@@ -620,3 +620,52 @@ export async function makeGroupAction(f: FormData) {
   if (error) back(`/customers/${id}`, { error: friendly(error.message) });
   back(`/customers/${id}`, { ok: "isgroup" });
 }
+
+// ---------- Τιμοκατάλογος (πακέτα ανά σταθμό) ----------
+
+function packageRow(f: FormData) {
+  const int = (k: string) => {
+    const v = s(f, k);
+    if (v == null) return null;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  return {
+    station: s(f, "station"),
+    kind: s(f, "kind"),
+    client_type: s(f, "client_type") ?? "local",
+    name: s(f, "name"),
+    description: s(f, "description"),
+    spots_per_day: int("spots_per_day"),
+    bonus_spots: int("bonus_spots") ?? 0,
+    max_sec: int("max_sec"),
+    price: money(s(f, "price")),
+    unit: s(f, "kind") === "mention" ? "mention" : "month",
+    long_months: int("long_months"),
+    long_bonus_spots: int("long_bonus_spots"),
+    long_price: money(s(f, "long_price")),
+    notes: s(f, "notes"),
+    needs_check: f.get("needs_check") === "1",
+    active: f.get("active") !== "0",
+  };
+}
+
+export async function savePackage(f: FormData) {
+  const { supabase, isAdmin } = await requireProfile();
+  if (!isAdmin) back("/pricing", { error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
+  const row = packageRow(f);
+  if (!row.name || row.price == null) back("/pricing", { error: "Χρειάζεται όνομα και τιμή" });
+  if (row.long_months != null && row.long_months < 2) back("/pricing", { error: "Το bonus θέλει τουλάχιστον 2 μήνες" });
+  const id = s(f, "id");
+  if (id) {
+    const { data, error } = await supabase.from("price_packages").update(row).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
+    revalidatePath("/pricing");
+    if (error) back("/pricing", { error: friendly(error.message) });
+    if (!data || data.length === 0) back("/pricing", { conflict: "1" });
+    back("/pricing", { ok: "pkgsaved" });
+  }
+  const { error } = await supabase.from("price_packages").insert({ ...row, sort: 50 });
+  revalidatePath("/pricing");
+  if (error) back("/pricing", { error: friendly(error.message) });
+  back("/pricing", { ok: "pkgadded" });
+}

@@ -26,6 +26,7 @@ const I = {
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
   more: <path d="M4 6h16M4 12h16M4 18h16" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  price: <><path d="M20 12l-8 8-9-9V3h8z" /><circle cx="7.5" cy="7.5" r="1.5" /></>,
   collapse: <path d="M15 6l-6 6 6 6" />,
 };
 const Icon = ({ d, size = 18 }: { d: React.ReactNode; size?: number }) => (
@@ -87,6 +88,7 @@ export function Shell({ name, role, isAdmin, counts, children }: Props) {
           {item("/tasks", "Tasks", I.tasks, counts.tasks)}
           {item("/customers", "Clients", I.clients)}
           {item("/agencies", "Media Shops", I.shops)}
+          {item("/pricing", "Τιμοκατάλογος", I.price)}
         </nav>
         <nav className="side-group">
           <div className="side-title nav-label">ΔΙΑΧΕΙΡΙΣΗ</div>

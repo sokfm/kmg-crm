@@ -336,4 +336,21 @@ do $$ declare g uuid; begin
   exception when raise_exception then null; end;
 end $$;
 
+-- 20. Τιμοκατάλογος: όλοι βλέπουν, μόνο admin αλλάζει
+select as_user(3);
+do $$ begin
+  assert (select count(*) from price_packages) >= 13, 'πωλητής δεν βλέπει τα πακέτα';
+end $$;
+update price_packages set price = 1 where name = 'Πακέτο 6';
+do $$ begin
+  assert (select price from price_packages where name = 'Πακέτο 6') = 700, 'πωλητής άλλαξε τιμή';
+end $$;
+select as_user(1);
+update price_packages set price = 710 where name = 'Πακέτο 6';
+do $$ begin
+  assert (select price from price_packages where name = 'Πακέτο 6') = 710, 'admin δεν άλλαξε τιμή';
+  assert (select version from price_packages where name = 'Πακέτο 6') = 2, 'δεν ανέβηκε η έκδοση';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;
