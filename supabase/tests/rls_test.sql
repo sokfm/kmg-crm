@@ -390,4 +390,26 @@ do $$ begin
   assert not is_own_email('info@notsokfm.gr'), 'ξένο domain θεωρήθηκε δικό μας';
 end $$;
 
+-- 24. Πρόταση: τη βλέπει όποιος βλέπει το lead· ακροατές αλλάζει μόνο admin
+reset role;
+insert into leads (id, company_name, owner_id, next_step, next_step_due) values ('b0000000-0000-0000-0000-000000000001','ΤΕΣΤ ΠΡΟΤΑΣΗ','00000000-0000-0000-0000-000000000003','x', current_date + 1);
+select as_user(3);
+insert into proposals (id, lead_id, client_type) values ('b1000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001','local');
+insert into proposal_items (proposal_id, station, kind, title, monthly_amount, months) values ('b1000000-0000-0000-0000-000000000001','DALKAS','package','Πακέτο 6+1',400,3);
+do $$ begin
+  assert (select count(*) from proposal_items) = 1, 'ο πωλητής δεν βλέπει την πρότασή του';
+  begin perform set_station_slots('ΣΟΚ FM', '{"08:30": 50}'::jsonb); assert false, 'πωλητής άλλαξε ακροατές';
+  exception when insufficient_privilege then null; end;
+end $$;
+select as_user(4);
+do $$ begin
+  assert (select count(*) from proposals where lead_id = 'b0000000-0000-0000-0000-000000000001') = 0, 'άλλος πωλητής βλέπει ξένη πρόταση';
+end $$;
+select as_user(1);
+select set_station_slots('ΣΟΚ FM', '{"08:30": 13}'::jsonb);
+do $$ begin
+  assert (select listeners_k from station_slots where station = 'ΣΟΚ FM' and slot = '08:30') = 13, 'admin δεν άλλαξε ακροατές';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

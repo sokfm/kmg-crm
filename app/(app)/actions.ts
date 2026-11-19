@@ -71,7 +71,8 @@ export async function createLead(f: FormData) {
       area: s(f, "area"),
       market: s(f, "market") ?? "chalkida",
       source: s(f, "source") ?? "phone",
-      product_line: s(f, "product_line") ?? "radio",
+      product_line: s(f, "product_line") === "digital" ? "digital" : "radio",
+      interests: s(f, "product_line") === "both" ? ["radio", "digital"] : [s(f, "product_line") === "digital" ? "digital" : "radio"],
       stations: f.getAll("stations").map(String),
       next_step: s(f, "next_step"),
       next_step_due: s(f, "next_step_due"),
@@ -657,27 +658,27 @@ function packageRow(f: FormData) {
 
 export async function savePackage(f: FormData) {
   const { supabase, isAdmin } = await requireProfile();
-  if (!isAdmin) back("/pricing", { error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
+  if (!isAdmin) back("/settings", { tab: "pricing", error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
   const row = packageRow(f);
-  if (!row.name || row.price == null) back("/pricing", { error: "Χρειάζεται όνομα και τιμή" });
-  if (row.long_months != null && row.long_months < 2) back("/pricing", { error: "Το bonus θέλει τουλάχιστον 2 μήνες" });
+  if (!row.name || row.price == null) back("/settings", { tab: "pricing", error: "Χρειάζεται όνομα και τιμή" });
+  if (row.long_months != null && row.long_months < 2) back("/settings", { tab: "pricing", error: "Το bonus θέλει τουλάχιστον 2 μήνες" });
   const id = s(f, "id");
   if (id) {
     const { data, error } = await supabase.from("price_packages").update(row).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
-    revalidatePath("/pricing");
-    if (error) back("/pricing", { error: friendly(error.message) });
-    if (!data || data.length === 0) back("/pricing", { conflict: "1" });
-    back("/pricing", { ok: "pkgsaved" });
+    revalidatePath("/pricing"); revalidatePath("/settings");
+    if (error) back("/settings", { tab: "pricing", error: friendly(error.message) });
+    if (!data || data.length === 0) back("/settings", { tab: "pricing", conflict: "1" });
+    back("/settings", { tab: "pricing", ok: "pkgsaved" });
   }
   const { error } = await supabase.from("price_packages").insert({ ...row, sort: 50 });
-  revalidatePath("/pricing");
-  if (error) back("/pricing", { error: friendly(error.message) });
-  back("/pricing", { ok: "pkgadded" });
+  revalidatePath("/pricing"); revalidatePath("/settings");
+  if (error) back("/settings", { tab: "pricing", error: friendly(error.message) });
+  back("/settings", { tab: "pricing", ok: "pkgadded" });
 }
 
 export async function saveStationRates(f: FormData) {
   const { supabase, isAdmin } = await requireProfile();
-  if (!isAdmin) back("/pricing", { error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
+  if (!isAdmin) back("/settings", { tab: "pricing", error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
   const num = (k: string) => {
     const v = s(f, k);
     if (v == null) return null;
@@ -685,10 +686,26 @@ export async function saveStationRates(f: FormData) {
     return Number.isFinite(n) && n >= 0 ? n : null;
   };
   const row = { media_shop_sec: num("media_shop_sec"), government_sec: num("government_sec"), local_per_k: num("local_per_k"), direct_per_k: num("direct_per_k") };
-  if (Object.values(row).some((v) => v == null)) back("/pricing", { error: "Συμπλήρωσε όλες τις τιμές (π.χ. 0,35)" });
+  if (Object.values(row).some((v) => v == null)) back("/settings", { tab: "pricing", error: "Συμπλήρωσε όλες τις τιμές (π.χ. 0,35)" });
   const { data, error } = await supabase.from("station_rates").update(row).eq("station", s(f, "station")).eq("version", Number(s(f, "version"))).select("station");
-  revalidatePath("/pricing");
-  if (error) back("/pricing", { error: friendly(error.message) });
-  if (!data || data.length === 0) back("/pricing", { conflict: "1" });
-  back("/pricing", { ok: "pkgsaved" });
+  revalidatePath("/pricing"); revalidatePath("/settings");
+  if (error) back("/settings", { tab: "pricing", error: friendly(error.message) });
+  if (!data || data.length === 0) back("/settings", { tab: "pricing", conflict: "1" });
+  back("/settings", { tab: "pricing", ok: "pkgsaved" });
+}
+
+export async function saveSlots(f: FormData) {
+  const { supabase, isAdmin } = await requireProfile();
+  if (!isAdmin) back("/settings", { error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
+  const values: Record<string, number> = {};
+  for (const [k, v] of f.entries()) {
+    if (!k.startsWith("slot_")) continue;
+    const n = Number(String(v).replace(",", "."));
+    if (!Number.isFinite(n) || n < 0 || n > 500) back("/settings", { tab: "pricing", error: `Λάθος αριθμός στο ${k.slice(5)}` });
+    values[k.slice(5)] = n;
+  }
+  const { error } = await supabase.rpc("set_station_slots", { p_station: s(f, "station"), p_values: values });
+  revalidatePath("/pricing"); revalidatePath("/settings");
+  if (error) back("/settings", { tab: "pricing", error: friendly(error.message) });
+  back("/settings", { tab: "pricing", ok: "pkgsaved" });
 }

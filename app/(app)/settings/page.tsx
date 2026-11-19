@@ -1,5 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { Flash } from "@/components/Flash";
+import { PricingBody } from "@/components/PricingBody";
 import { SubmitButton } from "@/components/SubmitButton";
 import { disconnectOutlook, setPassword, syncMailNow } from "../actions";
 
@@ -10,7 +11,8 @@ const fmt = (d: string | null) =>
 
 export default async function Settings({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
-  const { supabase, profile } = await requireProfile();
+  const { supabase, profile, isAdmin } = await requireProfile();
+  const tab = isAdmin && sp.tab === "pricing" ? "pricing" : "general";
   const { data: acc } = await supabase.from("my_mail_account").select("*").maybeSingle();
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const count = async (status: string) =>
@@ -19,9 +21,16 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const [nLogged, nLeads, nReview, nTasks] = (sp.n ?? "").split("-");
 
   return (
-    <main className="wrap" style={{ maxWidth: 720 }}>
+    <main className="wrap" style={{ maxWidth: tab === "pricing" ? 1000 : 720 }}>
       <h1>Ρυθμίσεις</h1>
+      {isAdmin && (
+        <div className="sf-tabs" style={{ marginBottom: 14 }}>
+          <a href="/settings" className={tab === "general" ? "on" : ""}>Γενικά</a>
+          <a href="/settings?tab=pricing" className={tab === "pricing" ? "on" : ""}>Κοστολόγηση</a>
+        </div>
+      )}
       <Flash sp={sp} />
+      {tab === "pricing" ? <PricingBody sp={sp} edit /> : <>
       {sp.ok === "sync" && sp.n && (
         <div className="msg ok">
           Καταγράφηκαν {nLogged} email σε καρτέλες · {nLeads} νέα leads · {nReview} προς έλεγχο · {nTasks} εργασίες.
@@ -68,6 +77,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           </>
         )}
       </div>
+      </>}
     </main>
   );
 }

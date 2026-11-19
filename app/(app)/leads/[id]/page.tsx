@@ -8,6 +8,8 @@ import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 import { StagePath } from "@/components/MoveDialog";
 import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
+import { toggleInterest } from "../../proposal-actions";
+import { CLIENT_LABEL, itemTotal, type ClientType, type Item } from "@/lib/pricing";
 
 const SOURCES: Record<string, string> = {
   phone: "Τηλέφωνο", site: "Site", facebook: "Facebook", seller: "Account Executive", base: "Βάση πελατών",
@@ -43,6 +45,10 @@ export default async function LeadPage({
   const people = (peopleData ?? []) as { id: string; full_name: string }[];
   const { data: contactData } = await supabase.from("contacts").select(PERSON_SELECT).eq("lead_id", id);
   const persons = (contactData ?? []) as Person[];
+  const { data: prop } = await supabase.from("proposals").select("client_type, proposal_items(station, monthly_amount, long_months, long_amount, months)").eq("lead_id", id).maybeSingle();
+  const propItems = ((prop?.proposal_items ?? []) as Pick<Item, "station" | "monthly_amount" | "long_months" | "long_amount" | "months">[]);
+  const propTotal = propItems.reduce((a, i) => a + itemTotal(i).total, 0);
+  const interests = ((lead.interests as string[] | null) ?? [lead.product_line]) as string[];
 
   // Αν το lead αφορά υπάρχοντα πελάτη: το ιστορικό του από την τιμολόγηση
   const [{ data: cust }, { data: lines }] = lead.customer_id
@@ -262,12 +268,37 @@ export default async function LeadPage({
             <h2>Εργασίες ({openTasks.length})</h2>
             <NewTaskForm back={`/leads/${lead.id}`} leadId={lead.id} />
           </div>
+          <div className="card stack">
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+              <h2 style={{ margin: 0 }}>Πρόταση</h2>
+              {prop?.client_type && <span className="badge gray">{CLIENT_LABEL[prop.client_type as ClientType]}</span>}
+            </div>
+            {propItems.length ? (
+              <>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{eur(propTotal)}</div>
+                <div className="muted" style={{ fontSize: 13 }}>{[...new Set(propItems.map((i) => i.station))].join(" · ")} · {propItems.length} {propItems.length === 1 ? "γραμμή" : "γραμμές"} · χωρίς ΦΠΑ</div>
+              </>
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>Στήσε τα νούμερα: μέσο, πακέτο ή κοστολόγηση πλάνου, διάρκεια.</p>
+            )}
+            <div><Link href={`/leads/${lead.id}/proposal`} className="btn">{propItems.length ? "Άνοιγμα πρότασης" : "Νέα πρόταση"}</Link></div>
+          </div>
           <PeopleCard people={persons} leadId={lead.id} back={`/leads/${lead.id}`} canEdit />
           <div className="card sf-fields">
             <h2>Πληροφορίες</h2>
             <div><span>Πηγή</span>{SOURCES[lead.source] ?? lead.source}</div>
             <div><span>Κλάδος επιχείρησης</span>{lead.category ?? "—"}</div>
-            <div><span>Ζητάει διαφήμιση σε</span>{lead.product_line === "digital" ? "Digital / social" : "Ραδιόφωνο"}</div>
+            <div>
+              <span>Ενδιαφέρεται για</span>
+              <form action={toggleInterest} className="row" style={{ gap: 6 }}>
+                <input type="hidden" name="id" value={lead.id} /><input type="hidden" name="version" value={lead.version} />
+                {([["radio", "Radio"], ["digital", "Digital"]] as const).map(([k, label]) => (
+                  <button key={k} type="submit" name="which" value={k} className={interests.includes(k) ? "" : "secondary"} style={{ padding: "6px 14px" }} aria-pressed={interests.includes(k)}>
+                    {interests.includes(k) ? "✓ " : ""}{label}
+                  </button>
+                ))}
+              </form>
+            </div>
             <div><span>Σταθμοί</span>{(lead.stations ?? []).join(", ") || "—"}</div>
             <div><span>Περιοχή</span>{lead.area ?? "—"}</div>
             <div><span>Email</span>{lead.email ? <a href={`mailto:${lead.email}`}>{lead.email}</a> : "—"}</div>
