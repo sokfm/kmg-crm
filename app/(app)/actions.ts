@@ -503,31 +503,11 @@ export async function webLookup(f: FormData) {
   back(path, { ok: "web" });
 }
 
-export async function runWebBatch(f: FormData) {
-  const { isAdmin } = await requireProfile();
-  if (!isAdmin) back("/web-check", { error: "Μόνο ο Νίκος ή η Γιάννα" });
-  const n = Math.min(60, Math.max(1, Number(s(f, "n")) || 10));
-  const { supabaseAdmin } = await import("@/lib/supabase/admin");
-  const { enrichBatch } = await import("@/lib/enrich");
-  const r = await enrichBatch(supabaseAdmin(), n);
-  revalidatePath("/web-check");
-  if (r.stopped) back("/web-check", { error: `Σταμάτησε: ${r.stopped}` });
-  back("/web-check", { ok: "webbatch", n: `${r.done}-${r.found}-${r.review}-${r.errors}` });
-}
-
-export async function setWebAuto(f: FormData) {
-  const { supabase, profile } = await requireProfile();
-  const on = s(f, "on") === "1";
-  const { error } = await supabase.from("app_settings").upsert({ key: "web_auto", value: { on, error: null }, updated_by: profile.id, updated_at: new Date().toISOString() });
-  revalidatePath("/web-check");
-  if (error) back("/web-check", { error: friendly(error.message) });
-  back("/web-check", { ok: on ? "webauto_on" : "webauto_off" });
-}
-
 export async function decideWeb(f: FormData) {
   const { supabase } = await requireProfile();
+  const to = s(f, "back")?.startsWith("/customers/") ? s(f, "back")! : "/customers";
   const { error } = await supabase.rpc("decide_web_review", { p_id: s(f, "id"), p_closed: s(f, "closed") === "1" });
-  revalidatePath("/web-check");
-  if (error) back("/web-check", { error: friendly(error.message) });
-  back("/web-check", { ok: s(f, "closed") === "1" ? "webclosed" : "webkept" });
+  revalidatePath(to);
+  if (error) back(to, { error: friendly(error.message) });
+  back(to, { ok: s(f, "closed") === "1" ? "webclosed" : "webkept" });
 }

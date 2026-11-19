@@ -300,3 +300,7 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 .seg-toggle { display: inline-flex; border: 1px solid #dcd8e1; border-radius: 10px; overflow: hidden; background: #fff; }
 .seg-toggle > * { padding: 8px 14px; font-size: 13px; font-weight: 700; color: #3f3a47; }
 .seg-toggle .on { background: var(--night); color: #fff; }
+.sf-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* Τίποτα στο περιεχόμενο δεν σπρώχνει τη σελίδα στο πλάι (κόβει το πλαϊνό μενού) */
+html, body { overflow-x: hidden; }
+.content { overflow-x: clip; }

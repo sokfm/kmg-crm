@@ -14,7 +14,7 @@ export default async function More() {
     ["/agencies", "Media Shops"],
     ...(isAdmin ? ([["/dashboard", "Dashboard"]] as [string, string][]) : []),
     ...(review ? ([["/inbox", "Προς έλεγχο", review]] as [string, string, number][]) : []),
-    ...(isAdmin ? ([["/merges", "Merge"], ["/web-check", "Έλεγχος online"]] as [string, string][]) : []),
+    ...(isAdmin ? ([["/merges", "Merge"]] as [string, string][]) : []),
     ["/notifications", "Notifications", notes ?? 0],
     ["/settings", "Ρυθμίσεις & Outlook"],
   ];

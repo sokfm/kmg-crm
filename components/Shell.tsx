@@ -92,7 +92,6 @@ export function Shell({ name, role, isAdmin, counts, children }: Props) {
           <div className="side-title nav-label">ΔΙΑΧΕΙΡΙΣΗ</div>
           {!!counts.review && item("/inbox", "Προς έλεγχο", I.inbox, counts.review, true)}
           {isAdmin && item("/merges", "Merge", I.merge)}
-          {isAdmin && item("/web-check", "Έλεγχος online", I.globe, counts.web)}
           {item("/notifications", "Notifications", I.bell, counts.notifications, true)}
         </nav>
         <Link href="/leads/new" className="side-new"><Icon d={I.plus} size={16} /><span className="nav-label">Νέο lead</span></Link>

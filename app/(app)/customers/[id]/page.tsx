@@ -3,7 +3,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr } from "@/lib/format";
-import { addActivity, renameCustomer, webLookup } from "../../actions";
+import { addActivity, decideWeb, renameCustomer, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
@@ -46,7 +46,16 @@ export default async function CustomerPage({
     <main className="wrap">
       <div>
         <Link href="/customers" className="muted">← Πελάτες</Link>
-        <h1>{c.display_name}</h1>
+        <div className="row">
+          <h1 className="grow" style={{ margin: 0 }}>{c.display_name}</h1>
+          {isAdmin && (
+            <form action={webLookup}>
+              <input type="hidden" name="kind" value="customer" />
+              <input type="hidden" name="id" value={c.id} />
+              <SubmitButton className="secondary" pending="Ψάχνω online…" hint="Η AI ψάχνει στο ίντερνετ, 10–30 δευτερόλεπτα">{c.web_checked_at ? "Ξανά έλεγχος online" : "Έλεγχος online"}</SubmitButton>
+            </form>
+          )}
+        </div>
         <div className="muted">
           {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {c.closed_at ? "Κλειστή επιχείρηση" : c.status === "base" ? "Στη βάση" : "Ενεργός"} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
         </div>
@@ -72,7 +81,8 @@ export default async function CustomerPage({
         <div className="card"><div className="muted">Τελευταία επαφή</div><div className="kpi">{lastActivity ? dateGr(lastActivity.occurred_at) : "—"}</div></div>
       </div>
 
-          <div className="card sf-fields" style={{ maxWidth: 720 }}>
+      {c.web_checked_at && (
+          <div className="card sf-fields">
         <div className="row"><h2 className="grow" style={{ margin: 0 }}>Από το ίντερνετ</h2>
           {c.web_status === "found" && <span className="badge good">βρέθηκε</span>}
           {c.web_status === "closed" && <span className="badge late">φαίνεται κλειστή</span>}
@@ -90,14 +100,16 @@ export default async function CustomerPage({
             <p className="muted" style={{ margin: 0 }}>Η AI συμπληρώνει μόνο κενά πεδία· ό,τι έγραψες εσύ δεν αλλάζει. Έλεγξέ τα πριν τα χρησιμοποιήσεις.</p>
           </>
         )}
-        {isAdmin && (
-          <form action={webLookup}>
-            <input type="hidden" name="kind" value="customer" />
-            <input type="hidden" name="id" value={c.id} />
-            <SubmitButton className="secondary" pending="Ψάχνω…" hint="Η AI ψάχνει στο ίντερνετ, 10–30 δευτερόλεπτα">{c.web_checked_at ? "Ξαναψάξε στο ίντερνετ" : "Ψάξε στο ίντερνετ"}</SubmitButton>
-          </form>
+        {isAdmin && (c.web_status === "not_found" || c.web_status === "closed") && (
+          <div className="row">
+            <span className="muted grow">{c.closed_at ? "Σημειωμένη ως κλειστή επιχείρηση." : "Υπάρχει ακόμα η επιχείρηση;"}</span>
+            <a className="btn secondary" href={`https://www.google.com/search?q=${encodeURIComponent(c.display_name + " Χαλκίδα")}`} target="_blank" rel="noreferrer">Google ↗</a>
+            <form action={decideWeb}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="closed" value="0" /><input type="hidden" name="back" value={`/customers/${c.id}`} /><SubmitButton className="secondary">Υπάρχει</SubmitButton></form>
+            {!c.closed_at && <form action={decideWeb}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="closed" value="1" /><input type="hidden" name="back" value={`/customers/${c.id}`} /><SubmitButton className="dark">Έκλεισε</SubmitButton></form>}
+          </div>
         )}
       </div>
+      )}
 
       {byYear.length > 0 && (
         <div className="card">

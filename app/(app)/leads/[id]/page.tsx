@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
-import { ACTIVITY, LOST_KINDS, STAGES, dateGr, eur, today } from "@/lib/format";
+import { ACTIVITY, LOST_KINDS, STAGES, dateGr, eur, periodGr, today } from "@/lib/format";
 import { addActivity, updateLead, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
@@ -40,6 +40,16 @@ export default async function LeadPage({
       : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
   ]);
   const people = (peopleData ?? []) as { id: string; full_name: string }[];
+
+  // Αν το lead αφορά υπάρχοντα πελάτη: το ιστορικό του από την τιμολόγηση
+  const [{ data: cust }, { data: lines }] = lead.customer_id
+    ? await Promise.all([
+        supabase.from("customers").select("id, display_name, lifetime_revenue, first_period, last_period, stations, revenue_by_year, agency, profiles!customers_owner_id_fkey(full_name)").eq("id", lead.customer_id).maybeSingle(),
+        supabase.from("history_lines").select("record_id, period, station, amount, amount_type, package_raw").eq("customer_id", lead.customer_id).eq("source_scope", "monthly_billing").order("period", { ascending: false }).limit(12),
+      ])
+    : [{ data: null }, { data: null }];
+  const custYears = Object.entries(((cust?.revenue_by_year ?? {}) as Record<string, number>)).sort(([a], [b]) => a.localeCompare(b));
+  const custMax = Math.max(1, ...custYears.map(([, v]) => v));
   const activities = (acts ?? []) as unknown as { id: string; type: string; summary: string; occurred_at: string; profiles: { full_name: string } | null }[];
   const openTasks = (taskData ?? []) as unknown as TaskRow[];
   const lastContact = activities.find((a) => a.type !== "note");
@@ -99,6 +109,7 @@ export default async function LeadPage({
 
       <div className="sf-cols">
         {/* Αριστερά: Δραστηριότητα / Στοιχεία */}
+        <div className="sf-left">
         <div className="card sf-main">
           <div className="sf-tabs">
             <Link href={`/leads/${lead.id}`} className={tab === "activity" ? "on" : ""}>Δραστηριότητα</Link>
@@ -202,6 +213,44 @@ export default async function LeadPage({
               <SubmitButton>Αποθήκευση</SubmitButton>
             </form>
           )}
+        </div>
+
+        {cust && (
+          <div className="card">
+            <div className="row" style={{ marginBottom: 10 }}>
+              <h2 className="grow" style={{ margin: 0 }}>Ιστορικό πελάτη</h2>
+              <Link href={`/customers/${cust.id}`} style={{ fontWeight: 700, fontSize: 13 }}>Καρτέλα πελάτη ›</Link>
+            </div>
+            <div className="sf-highlights" style={{ borderTop: 0, paddingTop: 0 }}>
+              <div><span>Συνολικός τζίρος</span><strong>{eur(cust.lifetime_revenue)}</strong></div>
+              <div><span>Πελάτης από</span><strong>{periodGr(cust.first_period)}</strong></div>
+              <div><span>Τελευταία καμπάνια</span><strong>{periodGr(cust.last_period)}</strong></div>
+              <div><span>Σταθμοί</span><strong>{(cust.stations ?? []).join(", ") || "—"}</strong></div>
+              {cust.agency && <div><span>Media shop</span><strong>{cust.agency}</strong></div>}
+            </div>
+            {custYears.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div className="bars">{custYears.map(([y, v]) => <div key={y} title={`${y}: ${eur(v)}`} style={{ height: `${(v / custMax) * 100}%` }} />)}</div>
+                <div className="bars-labels">{custYears.map(([y]) => <span key={y}>{y.slice(2)}</span>)}</div>
+              </div>
+            )}
+            {(lines ?? []).length > 0 && (
+              <table style={{ marginTop: 12 }}>
+                <thead><tr><th>Μήνας</th><th>Σταθμός</th><th className="num">Ποσό</th><th className="hide-m">Πακέτο</th></tr></thead>
+                <tbody>
+                  {(lines ?? []).map((h) => (
+                    <tr key={h.record_id}>
+                      <td>{periodGr(h.period)}</td><td>{h.station ?? "—"}</td>
+                      <td className="num">{h.amount_type === "FREE" ? "Δώρο" : eur(h.amount)}</td>
+                      <td className="muted hide-m">{h.package_raw ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {(lines ?? []).length === 0 && <p className="muted" style={{ margin: 0 }}>Δεν υπάρχουν καμπάνιες στο αρχείο τιμολόγησης.</p>}
+          </div>
+        )}
         </div>
 
         {/* Δεξιά: σχετικά */}
