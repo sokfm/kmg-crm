@@ -44,7 +44,7 @@ export default async function Today() {
   return (
     <main className="wrap">
       <div>
-        <h1>Καλημέρα, {profile.full_name.split(" ")[0]}</h1>
+        <h1>{greeting()}, {profile.full_name.split(" ")[0]}</h1>
         <p className="muted">
           {rows.length === 0 ? "Τίποτα για σήμερα. Ώρα να ψάξεις στη βάση πελατών." : `${late.length + now.length} βήματα για σήμερα, ${late.length} καθυστερημένα.`}
         </p>
@@ -52,9 +52,9 @@ export default async function Today() {
 
       {isAdmin && (toAssign > 0 || toApprove > 0 || toMerge > 0) && (
         <div className="card alert row">
-          {toAssign > 0 && <Link href="/leads?filter=unassigned" className="badge late">{toAssign} leads για ανάθεση</Link>}
-          {toApprove > 0 && <Link href="/base" className="badge late">{toApprove} αιτήματα από τη βάση</Link>}
-          {toMerge > 0 && <Link href="/merges" className="badge gray">{toMerge} ομάδες πελατών για έλεγχο</Link>}
+          {toAssign > 0 && <Link href="/leads?filter=unassigned" className="badge late">{toAssign === 1 ? "1 lead για ανάθεση" : `${toAssign} leads για ανάθεση`}</Link>}
+          {toApprove > 0 && <Link href="/base" className="badge late">{toApprove === 1 ? "1 αίτημα από τη βάση" : `${toApprove} αιτήματα από τη βάση`}</Link>}
+          {toMerge > 0 && <Link href="/merges" className="badge gray">{toMerge === 1 ? "1 ομάδα πελατών για έλεγχο" : `${toMerge} ομάδες πελατών για έλεγχο`}</Link>}
         </div>
       )}
 
@@ -63,4 +63,12 @@ export default async function Today() {
       {tomorrow.length > 0 && (<><div className="section-label muted">ΑΥΡΙΟ</div><List items={tomorrow} /></>)}
     </main>
   );
+}
+
+// Χαιρετισμός με βάση την ώρα Ελλάδας (ο server της Vercel τρέχει σε ώρα UTC)
+function greeting() {
+  const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Europe/Athens" }).format(new Date()));
+  if (h >= 5 && h < 12) return "Καλημέρα";
+  if (h >= 12 && h < 18) return "Καλό απόγευμα";
+  return "Καλησπέρα";
 }
