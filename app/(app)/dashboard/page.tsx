@@ -34,7 +34,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const [rows, { data: yearly }, { data: people }, { data: agencies }, { data: open }] = await Promise.all([
     fetchRevenue(supabase, [Y, Y - 1]),
     supabase.from("revenue_yearly").select("year, amount").order("year"),
-    supabase.from("profiles").select("id, full_name"),
+    supabase.from("profiles").select("id, full_name, role"),
     supabase.from("agencies").select("id, name"),
     supabase.from("leads").select("status, expected_value").not("status", "in", "(won,lost)"),
   ]);
@@ -61,6 +61,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     return [...m.entries()].filter(([, v]) => v.cur || v.prev).sort((a, b) => b[1].cur - a[1].cur);
   }
   const names = new Map((people ?? []).map((p) => [p.id, p.full_name]));
+  // Πελάτες χωρίς υπεύθυνο (π.χ. της βάσης, παλιών πωλητών) μετράνε στον Νίκο
+  const ceoId = (people ?? []).find((p) => p.role === "ceo")?.id;
   const agencyNames = new Map((agencies ?? []).map((a) => [a.id, a.name]));
   const totalCur = ytd(Y);
 
@@ -158,7 +160,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       <div className="grid2">
         <Table title={`Ανά σταθμό · ${ytdLabel}`} data={breakdown((r) => r.station)} />
-        <Table title={`Ανά πωλητή · ${ytdLabel}`} data={breakdown((r) => (r.owner_id ? names.get(r.owner_id) ?? "—" : "Χωρίς υπεύθυνο"))} />
+        <Table title={`Ανά πωλητή · ${ytdLabel}`} data={breakdown((r) => names.get(r.owner_id ?? ceoId ?? "") ?? "—")} />
         <Table title={`Ανά δρόμο πώλησης · ${ytdLabel}`} data={breakdown((r) => CHANNEL[r.channel] ?? r.channel)} />
         <Table
           title={`Media shops · ${ytdLabel}`}
