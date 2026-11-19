@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/today" className="logo">KMG CRM</Link>
           <span className="links row">
             <Link href="/today">Σήμερα</Link>
-            <Link href="/dashboard">Dashboard</Link>
+            {isAdmin && <Link href="/dashboard">Dashboard</Link>}
             <Link href="/pipeline">Pipeline</Link>
             <Link href="/leads">Leads</Link>
             <Link href="/tasks">{taskCount ? `Εργασίες (${taskCount})` : "Εργασίες"}</Link>
@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <nav className="bottom">
         <Link href="/today">Σήμερα</Link>
         <Link href="/pipeline">Pipeline</Link>
-        <Link href="/dashboard">Dashboard</Link>
+        {isAdmin && <Link href="/dashboard">Dashboard</Link>}
         <Link href="/tasks">{taskCount ? `Εργασίες ${taskCount}` : "Εργασίες"}</Link>
         <Link href="/customers">Πελάτες</Link>
         <Link href="/agencies">Shops</Link>

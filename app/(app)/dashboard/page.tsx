@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireProfile } from "@/lib/auth";
 import { CHANNEL, eur, today } from "@/lib/format";
@@ -36,6 +37,8 @@ function Delta({ cur, prev }: { cur: number; prev: number }) {
 export default async function Dashboard({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const { supabase, isAdmin } = await requireProfile();
+  // Μόνο Νίκος και Γιάννα (ceo / sales manager)
+  if (!isAdmin) redirect("/today");
   const t = today();
   const nowY = Number(t.slice(0, 4));
   const nowM = Number(t.slice(5, 7));
@@ -116,7 +119,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         ))}
       </div>
       <p className="muted" style={{ margin: 0 }}>
-        Τζίρος από το αρχείο τιμολόγησης (ποσά όπως είναι στο αρχείο). {!isAdmin && "Βλέπεις μόνο τους δικούς σου πελάτες."}
+        Τζίρος από το αρχείο τιμολόγησης (ποσά όπως είναι στο αρχείο).
       </p>
 
       <div className="kpis">

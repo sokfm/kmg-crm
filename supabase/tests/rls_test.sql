@@ -243,4 +243,11 @@ do $$ begin
 end $$;
 reset role;
 
+-- 15. Dashboard τζίρου: μόνο ceo / sales manager
+select as_user(3);
+do $$ begin
+  assert (select count(*) from revenue_monthly) = 0 and (select count(*) from revenue_yearly) = 0, 'πωλητής βλέπει τζίρο dashboard';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;
