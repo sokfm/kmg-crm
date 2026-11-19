@@ -12,7 +12,7 @@ export default async function PlanPage() {
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const defaultStart = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
   return (
-    <main className="wrap" style={{ maxWidth: 1000 }}>
+    <main className="wrap" style={{ maxWidth: 1500 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
         <h1>Κοστολόγηση πλάνου</h1>
         <Link href="/pricing" className="muted">← Τιμοκατάλογος</Link>

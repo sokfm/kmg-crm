@@ -4,143 +4,178 @@ import { useMemo, useState } from "react";
 
 type Rate = { station: string; local_per_k: number; direct_per_k: number };
 type Slot = { station: string; slot: string; listeners_k: number; sort: number };
-type Counts = { wd: number; sat: number; sun: number };
 
-const eur = (n: number) => new Intl.NumberFormat("el-GR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " €";
+const eur = (n: number) => new Intl.NumberFormat("el-GR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+const num = (n: number, d = 4) => n.toLocaleString("el-GR", { maximumFractionDigits: d });
+const DOW = ["Κ", "Δ", "ΤΡ", "ΤΕ", "Π", "ΠΑ", "Σ"];
 const MONTH = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"];
+const MAX = 3; // μέγιστα σποτ ανά μισάωρο ανά ημέρα με το κλικ
 
-// Πόσες καθημερινές, Σάββατα, Κυριακές έχει ένας μήνας
-function daysOf(year: number, month: number) {
-  const n = new Date(year, month + 1, 0).getDate();
-  let wd = 0, sat = 0, sun = 0;
-  for (let d = 1; d <= n; d++) {
-    const w = new Date(year, month, d).getDay();
-    if (w === 6) sat++; else if (w === 0) sun++; else wd++;
-  }
-  return { wd, sat, sun };
-}
-
-const toInt = (v: string) => {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 0;
-};
+type Grid = Record<string, number[]>; // μισάωρο → σποτ ανά ημέρα του μήνα
 
 export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; slots: Slot[]; defaultStart: string }) {
   const [station, setStation] = useState(rates[0]?.station ?? "ΣΟΚ FM");
-  const [type, setType] = useState<"local" | "direct">("local");
   const [sec, setSec] = useState("30");
   const [start, setStart] = useState(defaultStart);
-  const [months, setMonths] = useState("1");
-  const [plan, setPlan] = useState<Record<string, Record<string, Counts>>>({});
+  const [product, setProduct] = useState("");
+  const [grids, setGrids] = useState<Record<string, Grid>>({});
 
-  const rate = rates.find((r) => r.station === station);
-  const perK = rate ? (type === "local" ? rate.local_per_k : rate.direct_per_k) : 0;
+  const [y, m] = start.split("-").map(Number);
+  const year = y || new Date().getFullYear();
+  const month = (m || 1) - 1;
+  const nDays = new Date(year, month + 1, 0).getDate();
+  const days = Array.from({ length: nDays }, (_, i) => new Date(year, month, i + 1).getDay());
+
+  const rate = rates.find((r) => r.station === station) ?? { station, local_per_k: 0, direct_per_k: 0 };
   const rows = slots.filter((s) => s.station === station).sort((a, b) => a.sort - b.sort);
-  const cur = plan[station] ?? {};
+  const grid = grids[station] ?? {};
   const seconds = Math.max(1, Math.min(120, parseInt(sec, 10) || 30));
-  const nMonths = Math.max(1, Math.min(24, parseInt(months, 10) || 1));
+  const cell = (slot: string, d: number) => grid[slot]?.[d] ?? 0;
 
-  const set = (slot: string, k: keyof Counts, v: string) =>
-    setPlan((p) => ({ ...p, [station]: { ...(p[station] ?? {}), [slot]: { ...{ wd: 0, sat: 0, sun: 0 }, ...(p[station]?.[slot] ?? {}), [k]: toInt(v) } } }));
+  const update = (fn: (g: Grid) => Grid) => setGrids((all) => ({ ...all, [station]: fn({ ...(all[station] ?? {}) }) }));
+  const row = (g: Grid, slot: string) => Array.from({ length: 31 }, (_, d) => g[slot]?.[d] ?? 0);
 
-  // Γρήγορο γέμισμα: ίδιος αριθμός σποτ σε όλες τις ημέρες ενός μισάωρου
-  const fillEvery = (slot: string, n: number) =>
-    setPlan((p) => ({ ...p, [station]: { ...(p[station] ?? {}), [slot]: { wd: n, sat: n, sun: n } } }));
+  // Κλικ σε κελί: 0 → 1 → 2 → 3 → 0
+  const bump = (slot: string, d: number) =>
+    update((g) => { const r = row(g, slot); r[d] = (r[d] + 1) % (MAX + 1); g[slot] = r; return g; });
+  // Κλικ στην ώρα: γεμίζει όλη τη γραμμή με 1 (ή την αδειάζει αν είναι γεμάτη)
+  const fillRow = (slot: string) =>
+    update((g) => { const r = row(g, slot); const full = r.slice(0, nDays).every((v) => v > 0); g[slot] = r.map((_, d) => (d < nDays ? (full ? 0 : 1) : 0)); return g; });
+  // Κλικ στην ημέρα: γεμίζει/αδειάζει τη στήλη μόνο στις ώρες που ήδη έχουν σποτ (αλλιώς σε όλες)
+  const fillCol = (d: number) =>
+    update((g) => {
+      const used = rows.filter((r) => row(g, r.slot).some((v) => v > 0));
+      const target = used.length ? used : rows;
+      const full = target.every((r) => (g[r.slot]?.[d] ?? 0) > 0);
+      for (const r of target) { const a = row(g, r.slot); a[d] = full ? 0 : Math.max(1, a[d]); g[r.slot] = a; }
+      return g;
+    });
+  // Μόνο Δευτέρα–Παρασκευή στις ώρες που έχουν σποτ
+  const weekdaysOnly = () =>
+    update((g) => { for (const r of rows) { const a = row(g, r.slot); if (a.some((v) => v > 0)) g[r.slot] = a.map((v, d) => (d < nDays && days[d] !== 0 && days[d] !== 6 ? Math.max(v, 1) : 0)); } return g; });
 
-  const result = useMemo(() => {
-    const [y, m] = start.split("-").map(Number);
-    const perMonth: { label: string; spots: number; cost: number }[] = [];
-    for (let i = 0; i < nMonths; i++) {
-      const d = new Date(y || new Date().getFullYear(), (m || 1) - 1 + i, 1);
-      const days = daysOf(d.getFullYear(), d.getMonth());
-      let spots = 0, cost = 0;
-      for (const r of rows) {
-        const c = cur[r.slot];
-        if (!c) continue;
-        const n = c.wd * days.wd + c.sat * days.sat + c.sun * days.sun;
-        spots += n;
-        cost += n * r.listeners_k * perK * seconds;
-      }
-      perMonth.push({ label: `${MONTH[d.getMonth()]} ${d.getFullYear()}`, spots, cost });
+  const t = useMemo(() => {
+    let spots = 0, local = 0, direct = 0;
+    const perDay = Array(nDays).fill(0);
+    const perRow: Record<string, { n: number; local: number; direct: number }> = {};
+    for (const r of rows) {
+      let n = 0;
+      for (let d = 0; d < nDays; d++) { const v = grid[r.slot]?.[d] ?? 0; n += v; perDay[d] += v; }
+      const l = n * r.listeners_k * rate.local_per_k * seconds;
+      const dr = n * r.listeners_k * rate.direct_per_k * seconds;
+      perRow[r.slot] = { n, local: l, direct: dr };
+      spots += n; local += l; direct += dr;
     }
-    const spots = perMonth.reduce((a, x) => a + x.spots, 0);
-    const cost = perMonth.reduce((a, x) => a + x.cost, 0);
-    return { perMonth, spots, cost, totalSec: spots * seconds };
-  }, [start, nMonths, rows, cur, perK, seconds]);
+    return { spots, local, direct, perDay, perRow };
+  }, [rows, grid, nDays, rate, seconds]);
 
-  const spotPrice = (k: number) => k * perK * seconds;
+  const totalSec = t.spots * seconds;
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const S = { cell: { width: 26, minWidth: 26, padding: 0, textAlign: "center" as const, borderLeft: "1px solid #eee", cursor: "pointer", userSelect: "none" as const, fontSize: 12 } };
 
   return (
     <div className="stack">
       <div className="card grid2">
+        <label>Προϊόν / πελάτης<input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="π.χ. JUMBO – Χριστούγεννα" /></label>
         <label>Σταθμός
-          <select value={station} onChange={(e) => setStation(e.target.value)}>
-            {rates.map((r) => <option key={r.station}>{r.station}</option>)}
-          </select>
+          <select value={station} onChange={(e) => setStation(e.target.value)}>{rates.map((r) => <option key={r.station}>{r.station}</option>)}</select>
         </label>
-        <label>Τιμή
-          <select value={type} onChange={(e) => setType(e.target.value as "local" | "direct")}>
-            <option value="local">Τοπικός πελάτης</option>
-            <option value="direct">Direct μεγάλος πελάτης</option>
-          </select>
-        </label>
-        <label>Διάρκεια σποτ (δευτερόλεπτα)<input inputMode="numeric" value={sec} onChange={(e) => setSec(e.target.value)} /></label>
-        <label>Έναρξη<input type="month" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-        <label>Μήνες<input inputMode="numeric" value={months} onChange={(e) => setMonths(e.target.value)} /></label>
-        <div className="muted" style={{ alignSelf: "end", fontSize: 13 }}>
-          Τιμή σποτ = ακροατές (χιλ.) × {perK.toLocaleString("el-GR")} € × {seconds}&apos;&apos;. Χωρίς ΦΠΑ, χωρίς εκπτώσεις.
-        </div>
+        <label>Διάρκεια σποτ (sec)<input inputMode="numeric" value={sec} onChange={(e) => setSec(e.target.value)} /></label>
+        <label>Μήνας<input type="month" value={start} onChange={(e) => setStart(e.target.value)} /></label>
       </div>
 
-      <div className="card" style={{ position: "sticky", top: 0, zIndex: 2 }}>
-        <div className="row" style={{ gap: 24, flexWrap: "wrap", alignItems: "baseline" }}>
-          <div><div className="muted" style={{ fontSize: 12 }}>Σύνολο</div><div style={{ fontSize: 24, fontWeight: 800 }}>{eur(result.cost)}</div></div>
-          <div><div className="muted" style={{ fontSize: 12 }}>Σποτ</div><div style={{ fontSize: 18, fontWeight: 700 }}>{result.spots.toLocaleString("el-GR")}</div></div>
-          <div><div className="muted" style={{ fontSize: 12 }}>Μέση τιμή σποτ</div><div style={{ fontSize: 18, fontWeight: 700 }}>{result.spots ? eur(result.cost / result.spots) : "—"}</div></div>
-          <div><div className="muted" style={{ fontSize: 12 }}>Μέση τιμή / sec</div><div style={{ fontSize: 18, fontWeight: 700 }}>{result.totalSec ? (result.cost / result.totalSec).toLocaleString("el-GR", { maximumFractionDigits: 4 }) + " €" : "—"}</div></div>
-          <button type="button" className="secondary" onClick={() => setPlan((p) => ({ ...p, [station]: {} }))}>Καθάρισμα</button>
+      <div className="card" style={{ padding: 0 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", padding: "10px 12px", borderBottom: "1px solid #eee", alignItems: "center" }}>
+          <strong>{station} · {MONTH[month]} {year}{product ? ` · ${product}` : ""}</strong>
+          <span className="muted" style={{ fontSize: 12 }}>Κλικ σε κελί: 0→1→2→3 · κλικ στην ώρα: όλη η γραμμή · κλικ στην ημέρα: όλη η στήλη</span>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="secondary" onClick={weekdaysOnly}>Μόνο Δευ–Παρ</button>
+          <button type="button" className="secondary" onClick={() => update(() => ({}))}>Καθάρισμα</button>
         </div>
-        {nMonths > 1 && result.spots > 0 && (
-          <table className="table" style={{ marginTop: 8, fontSize: 13 }}>
+        <div style={{ overflowX: "auto", maxHeight: "70vh" }}>
+          <table style={{ fontSize: 12, borderCollapse: "separate", borderSpacing: 0, width: "max-content" }}>
+            <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "#fff" }}>
+              <tr>
+                <th style={{ position: "sticky", left: 0, background: "#fff", zIndex: 3, minWidth: 54 }}>ΩΡΑ</th>
+                <th title="Ακροατές σε χιλιάδες">ΑΚΡ. 000</th>
+                <th>LOCAL €/sec</th>
+                <th>DIRECT €/sec</th>
+                <th>ΑΡΙΘ. ΜΕΤΑΔ.</th>
+                {days.map((w, d) => (
+                  <th key={d} onClick={() => fillCol(d)} style={{ ...S.cell, background: w === 0 || w === 6 ? "#f6f3f8" : "#fff", lineHeight: 1.1 }}>
+                    {d + 1}<br /><span className="muted" style={{ fontWeight: 500 }}>{DOW[w]}</span>
+                  </th>
+                ))}
+                <th style={{ textAlign: "right" }}>LOCAL €</th>
+                <th style={{ textAlign: "right" }}>DIRECT €</th>
+              </tr>
+            </thead>
             <tbody>
-              {result.perMonth.map((x) => (
-                <tr key={x.label}><td>{x.label}</td><td style={{ textAlign: "right" }}>{x.spots} σποτ</td><td style={{ textAlign: "right" }}>{eur(x.cost)}</td></tr>
-              ))}
+              {rows.map((r) => {
+                const pr = t.perRow[r.slot];
+                return (
+                  <tr key={r.slot} style={pr?.n ? { background: "var(--brand-bg)" } : undefined}>
+                    <td onClick={() => fillRow(r.slot)} style={{ position: "sticky", left: 0, background: pr?.n ? "#fbe7f8" : "#fff", fontWeight: 700, cursor: "pointer", zIndex: 1 }}>{r.slot}</td>
+                    <td style={{ textAlign: "right" }}>{num(r.listeners_k, 2)}</td>
+                    <td style={{ textAlign: "right" }}>{num(r.listeners_k * rate.local_per_k)}</td>
+                    <td style={{ textAlign: "right" }}>{num(r.listeners_k * rate.direct_per_k)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 700 }}>{pr?.n || ""}</td>
+                    {days.map((w, d) => {
+                      const v = cell(r.slot, d);
+                      return (
+                        <td key={d} onClick={() => bump(r.slot, d)}
+                          style={{ ...S.cell, height: 22, fontWeight: 700, background: v ? "var(--brand-grad)" : w === 0 || w === 6 ? "#faf8fb" : undefined, color: v ? "#0b0a0d" : undefined }}>
+                          {v || ""}
+                        </td>
+                      );
+                    })}
+                    <td style={{ textAlign: "right", paddingLeft: 10 }}>{pr?.n ? eur(pr.local) : ""}</td>
+                    <td style={{ textAlign: "right", paddingLeft: 10 }}>{pr?.n ? eur(pr.direct) : ""}</td>
+                  </tr>
+                );
+              })}
             </tbody>
+            <tfoot style={{ position: "sticky", bottom: 0, background: "#fff", fontWeight: 800, zIndex: 2 }}>
+              <tr>
+                <td style={{ position: "sticky", left: 0, background: "#fff", zIndex: 3, borderTop: "2px solid #ddd" }}>TOTAL</td>
+                <td /><td /><td />
+                <td style={{ textAlign: "right" }}>{t.spots || ""}</td>
+                {t.perDay.map((v, d) => <td key={d} style={{ ...S.cell, cursor: "default" }}>{v || ""}</td>)}
+                <td style={{ textAlign: "right", paddingLeft: 10 }}>{eur(t.local)} €</td>
+                <td style={{ textAlign: "right", paddingLeft: 10 }}>{eur(t.direct)} €</td>
+              </tr>
+            </tfoot>
           </table>
-        )}
+        </div>
       </div>
 
-      <div className="card" style={{ overflowX: "auto" }}>
-        <p className="muted" style={{ marginTop: 0 }}>Γράψε πόσα σποτ την ημέρα θέλεις σε κάθε μισάωρο. Τα κουμπιά 1 / 2 βάζουν τον ίδιο αριθμό σε όλες τις ημέρες.</p>
-        <table className="table">
-          <thead>
-            <tr><th>Ώρα</th><th style={{ textAlign: "right" }}>Ακροατές</th><th style={{ textAlign: "right" }}>Τιμή σποτ</th><th>Δευ–Παρ</th><th>Σάββατο</th><th>Κυριακή</th><th /></tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const c = cur[r.slot] ?? { wd: 0, sat: 0, sun: 0 };
-              const on = c.wd + c.sat + c.sun > 0;
-              return (
-                <tr key={r.slot} style={on ? { background: "var(--brand-bg)" } : undefined}>
-                  <td><strong>{r.slot}</strong></td>
-                  <td style={{ textAlign: "right" }}>{r.listeners_k.toLocaleString("el-GR")}.000</td>
-                  <td style={{ textAlign: "right" }}>{eur(spotPrice(r.listeners_k))}</td>
-                  {(["wd", "sat", "sun"] as const).map((k) => (
-                    <td key={k}>
-                      <input aria-label={`${r.slot} ${k}`} inputMode="numeric" style={{ width: 56 }} value={c[k] || ""} placeholder="0" onChange={(e) => set(r.slot, k, e.target.value)} />
-                    </td>
+      <div className="grid2">
+        {(["LOCAL", "DIRECT"] as const).map((kind) => {
+          const month1 = kind === "LOCAL" ? t.local : t.direct;
+          return (
+            <div key={kind} className="card">
+              <h3 style={{ marginTop: 0 }}>{kind === "LOCAL" ? "Τοπικός πελάτης" : "Direct μεγάλος πελάτης"}</h3>
+              <table className="table" style={{ fontSize: 12.5 }}>
+                <thead><tr><th>ΜΗΝΕΣ</th><th style={{ textAlign: "right" }}>ΣΠΟΤ</th><th style={{ textAlign: "right" }}>ΤΙΜΗ €</th><th style={{ textAlign: "right" }}>AVG SPOT</th><th style={{ textAlign: "right" }}>AVG SEC</th></tr></thead>
+                <tbody>
+                  {months.map((n) => (
+                    <tr key={n}>
+                      <td>{n}</td>
+                      <td style={{ textAlign: "right" }}>{(t.spots * n).toLocaleString("el-GR")}</td>
+                      <td style={{ textAlign: "right" }}>{eur(month1 * n)}</td>
+                      <td style={{ textAlign: "right" }}>{t.spots ? eur(month1 / t.spots) : "—"}</td>
+                      <td style={{ textAlign: "right" }}>{totalSec ? num(month1 / totalSec) : "—"}</td>
+                    </tr>
                   ))}
-                  <td className="row" style={{ gap: 4 }}>
-                    <button type="button" className="secondary" onClick={() => fillEvery(r.slot, 1)}>1</button>
-                    <button type="button" className="secondary" onClick={() => fillEvery(r.slot, 2)}>2</button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
+      <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Τιμές χωρίς ΦΠΑ και χωρίς εκπτώσεις. Οι μήνες επαναλαμβάνουν το πλάνο του μήνα που βλέπεις, όπως στο Excel. Συνολικά δευτερόλεπτα μήνα: {totalSec.toLocaleString("el-GR")}.
+      </p>
     </div>
   );
 }
