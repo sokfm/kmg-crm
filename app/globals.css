@@ -315,3 +315,7 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 .person.dnc { opacity: .7; }
 .person-head { display: flex; gap: 10px; align-items: center; }
 .person-links { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 13.5px; }
+
+/* Κοστολόγηση πλάνου: στενές στήλες σαν Excel */
+.plan-grid th, .plan-grid td { padding: 2px 5px; white-space: nowrap; }
+.plan-grid thead th { font-size: 10.5px; letter-spacing: 0; }

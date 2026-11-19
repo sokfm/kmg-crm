@@ -74,7 +74,7 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
 
   const totalSec = t.spots * seconds;
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
-  const S = { cell: { width: 26, minWidth: 26, padding: 0, textAlign: "center" as const, borderLeft: "1px solid #eee", cursor: "pointer", userSelect: "none" as const, fontSize: 12 } };
+  const S = { cell: { width: 19, minWidth: 19, padding: 0, textAlign: "center" as const, borderLeft: "1px solid #eee", cursor: "pointer", userSelect: "none" as const, fontSize: 11 } };
 
   return (
     <div className="stack">
@@ -96,14 +96,14 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
           <button type="button" className="secondary" onClick={() => update(() => ({}))}>Καθάρισμα</button>
         </div>
         <div style={{ overflowX: "auto", maxHeight: "70vh" }}>
-          <table style={{ fontSize: 12, borderCollapse: "separate", borderSpacing: 0, width: "max-content" }}>
+          <table className="plan-grid" style={{ fontSize: 11.5, borderCollapse: "separate", borderSpacing: 0, width: "max-content" }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "#fff" }}>
               <tr>
-                <th style={{ position: "sticky", left: 0, background: "#fff", zIndex: 3, minWidth: 54 }}>ΩΡΑ</th>
-                <th title="Ακροατές σε χιλιάδες">ΑΚΡ. 000</th>
-                <th>LOCAL €/sec</th>
-                <th>DIRECT €/sec</th>
-                <th>ΑΡΙΘ. ΜΕΤΑΔ.</th>
+                <th style={{ position: "sticky", left: 0, background: "#fff", zIndex: 3 }}>ΩΡΑ</th>
+                <th title="Ακροατές σε χιλιάδες">ΑΚΡ.</th>
+                <th title="Τοπική τιμή ανά δευτερόλεπτο">LOC/s</th>
+                <th title="Direct τιμή ανά δευτερόλεπτο">DIR/s</th>
+                <th title="Αριθμός μεταδόσεων">ΣΠΟΤ</th>
                 {days.map((w, d) => (
                   <th key={d} onClick={() => fillCol(d)} title={`${fmtD(dates[d])}`}
                     style={{ ...S.cell, background: w === 0 || w === 6 ? "#f6f3f8" : "#fff", lineHeight: 1.1, borderLeft: d > 0 && dates[d].getDate() === 1 ? "2px solid #B0128F" : S.cell.borderLeft }}>
@@ -128,13 +128,13 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
                       const v = cell(r.slot, d);
                       return (
                         <td key={d} onClick={() => bump(r.slot, d)}
-                          style={{ ...S.cell, height: 22, fontWeight: 700, background: v ? "var(--brand-grad)" : w === 0 || w === 6 ? "#faf8fb" : undefined, color: v ? "#0b0a0d" : undefined }}>
+                          style={{ ...S.cell, height: 20, fontWeight: 700, background: v ? "var(--brand-grad)" : w === 0 || w === 6 ? "#faf8fb" : undefined, color: v ? "#0b0a0d" : undefined }}>
                           {v || ""}
                         </td>
                       );
                     })}
-                    <td style={{ textAlign: "right", paddingLeft: 10 }}>{pr?.n ? eur(pr.local) : ""}</td>
-                    <td style={{ textAlign: "right", paddingLeft: 10 }}>{pr?.n ? eur(pr.direct) : ""}</td>
+                    <td style={{ textAlign: "right" }}>{pr?.n ? eur(pr.local) : ""}</td>
+                    <td style={{ textAlign: "right" }}>{pr?.n ? eur(pr.direct) : ""}</td>
                   </tr>
                 );
               })}
@@ -145,8 +145,8 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
                 <td /><td /><td />
                 <td style={{ textAlign: "right" }}>{t.spots || ""}</td>
                 {t.perDay.map((v, d) => <td key={d} style={{ ...S.cell, cursor: "default" }}>{v || ""}</td>)}
-                <td style={{ textAlign: "right", paddingLeft: 10 }}>{eur(t.local)} €</td>
-                <td style={{ textAlign: "right", paddingLeft: 10 }}>{eur(t.direct)} €</td>
+                <td style={{ textAlign: "right" }}>{eur(t.local)} €</td>
+                <td style={{ textAlign: "right" }}>{eur(t.direct)} €</td>
               </tr>
             </tfoot>
           </table>
