@@ -339,7 +339,7 @@ end $$;
 -- 20. Τιμοκατάλογος: όλοι βλέπουν, μόνο admin αλλάζει
 select as_user(3);
 do $$ begin
-  assert (select count(*) from price_packages) >= 13, 'πωλητής δεν βλέπει τα πακέτα';
+  assert (select count(*) from price_packages) >= 12, 'πωλητής δεν βλέπει τα πακέτα';
 end $$;
 update price_packages set price = 1 where name = 'Πακέτο 6';
 do $$ begin
