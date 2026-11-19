@@ -158,6 +158,19 @@ export async function decideMerge(f: FormData) {
   back("/merges", { ok: "1" });
 }
 
+export async function mergeSelected(f: FormData) {
+  const { supabase } = await requireProfile();
+  const ids = f.getAll("ids").map(String);
+  const { error } = await supabase.rpc("merge_selected", {
+    p_group: s(f, "id"),
+    p_ids: s(f, "none") === "1" ? [] : ids,
+    p_keep_name: s(f, "keep_name"),
+  });
+  revalidatePath("/merges");
+  if (error) back("/merges", { error: friendly(error.message) });
+  back("/merges", { ok: "1" });
+}
+
 // ---------- Ειδοποιήσεις ----------
 
 export async function markAllRead() {
