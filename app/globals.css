@@ -302,5 +302,5 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 .seg-toggle .on { background: var(--night); color: #fff; }
 .sf-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 /* Τίποτα στο περιεχόμενο δεν σπρώχνει τη σελίδα στο πλάι (κόβει το πλαϊνό μενού) */
-html, body { overflow-x: hidden; }
+.shell { overflow-x: clip; }
 .content { overflow-x: clip; }
