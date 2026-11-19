@@ -18,9 +18,9 @@ export default async function Agencies() {
 
   return (
     <main className="wrap">
-      <h1>Διαφημιστικές</h1>
+      <h1>Media Shops</h1>
       <p className="muted">
-        Μία καρτέλα για κάθε διαφημιστική. Τα email τους μπαίνουν εδώ αυτόματα, όχι στον πελάτη για τον οποίο γράφουν· τις αναγνωρίζουμε από τη διεύθυνση (π.χ. @umedia.gr).
+        Μία καρτέλα για κάθε media shop. Τα email τους μπαίνουν εδώ αυτόματα, όχι στον πελάτη για τον οποίο γράφουν· τις αναγνωρίζουμε από τη διεύθυνση (π.χ. @umedia.gr).
       </p>
       <div className="list">
         {rows.map((a) => {

@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/leads">Leads</Link>
             <Link href="/tasks">{taskCount ? `Εργασίες (${taskCount})` : "Εργασίες"}</Link>
             <Link href="/customers">Πελάτες</Link>
-            <Link href="/agencies">Διαφημιστικές</Link>
+            <Link href="/agencies">Media Shops</Link>
             <Link href="/base">Βάση</Link>
             {isAdmin && <Link href="/merges">Ενώσεις</Link>}
             {!!reviewCount && <Link href="/inbox">Προς έλεγχο ({reviewCount})</Link>}
@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Link href="/leads">Leads</Link>
         <Link href="/tasks">{taskCount ? `Εργασίες ${taskCount}` : "Εργασίες"}</Link>
         <Link href="/customers">Πελάτες</Link>
-        <Link href="/agencies">Διαφημ.</Link>
+        <Link href="/agencies">Media Shops</Link>
         {reviewCount ? <Link href="/inbox">Έλεγχος {reviewCount}</Link> : <Link href="/base">Βάση</Link>}
         <Link href="/notifications">{count ? `🔔 ${count}` : "🔔"}</Link>
       </nav>

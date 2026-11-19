@@ -27,7 +27,7 @@ export default async function AgencyPage({
   return (
     <main className="wrap">
       <div>
-        <Link href="/agencies" className="muted">← Διαφημιστικές</Link>
+        <Link href="/agencies" className="muted">← Media Shops</Link>
         <h1>🏢 {a.name}</h1>
         <div className="muted">{(custs ?? []).length} πελάτες μέσω του πρακτορείου · συνολικός τζίρος {eur(total)}</div>
       </div>
