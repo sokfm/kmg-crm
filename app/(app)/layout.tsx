@@ -8,7 +8,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .select("id", { count: "exact", head: true })
     .eq("user_id", profile.id)
     .is("read_at", null);
-  const bell = count ? `Ειδοποιήσεις (${count})` : "Ειδοποιήσεις";
+  const bell = count ? `Notifications (${count})` : "Notifications";
   const { count: reviewCount } = await supabase.from("email_messages").select("id", { count: "exact", head: true }).eq("status", "review");
   const { count: taskCount } = await supabase
     .from("tasks").select("id", { count: "exact", head: true })
@@ -20,14 +20,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="inner">
           <Link href="/today" className="logo">KMG CRM</Link>
           <span className="links row">
-            <Link href="/today">Σήμερα</Link>
+            <Link href="/today">Today</Link>
             {isAdmin && <Link href="/dashboard">Dashboard</Link>}
             <Link href="/pipeline">Pipeline</Link>
             <Link href="/leads">Leads</Link>
-            <Link href="/tasks">{taskCount ? `Εργασίες (${taskCount})` : "Εργασίες"}</Link>
-            <Link href="/customers">Πελάτες</Link>
+            <Link href="/tasks">{taskCount ? `Tasks (${taskCount})` : "Tasks"}</Link>
+            <Link href="/customers">Clients</Link>
             <Link href="/agencies">Media Shops</Link>
-            {isAdmin && <Link href="/merges">Ενώσεις</Link>}
+            {isAdmin && <Link href="/merges">Merge</Link>}
             {!!reviewCount && <Link href="/inbox">Προς έλεγχο ({reviewCount})</Link>}
             <Link href="/notifications">{bell}</Link>
             <Link href="/settings">⚙︎</Link>
@@ -39,11 +39,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </nav>
       {children}
       <nav className="bottom">
-        <Link href="/today">Σήμερα</Link>
+        <Link href="/today">Today</Link>
         <Link href="/pipeline">Pipeline</Link>
         {isAdmin && <Link href="/dashboard">Dashboard</Link>}
-        <Link href="/tasks">{taskCount ? `Εργασίες ${taskCount}` : "Εργασίες"}</Link>
-        <Link href="/customers">Πελάτες</Link>
+        <Link href="/tasks">{taskCount ? `Tasks ${taskCount}` : "Tasks"}</Link>
+        <Link href="/customers">Clients</Link>
         <Link href="/agencies">Shops</Link>
         {!!reviewCount && <Link href="/inbox">Έλεγχος {reviewCount}</Link>}
         <Link href="/notifications">{count ? `🔔 ${count}` : "🔔"}</Link>
