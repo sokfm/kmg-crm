@@ -5,6 +5,7 @@ export type Role = "ceo" | "sales_manager" | "account_exec" | "digital_intake";
 export type Profile = {
   id: string;
   full_name: string;
+  first_name: string | null;
   email: string;
   role: Role;
   sees_digital: boolean;
@@ -18,7 +19,7 @@ export async function requireProfile() {
   if (!user) redirect("/login");
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, sees_digital")
+    .select("id, full_name, first_name, email, role, sees_digital")
     .eq("id", user.id)
     .single();
   if (!profile) redirect("/login?error=noprofile");

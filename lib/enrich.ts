@@ -21,7 +21,7 @@ const SYSTEM = `Είσαι βοηθός έρευνας για το CRM της Ka
 Σου δίνουν το όνομα μιας επιχείρησης-διαφημιζόμενου, όπως γράφεται στα τιμολόγια του ραδιοφώνου (συχνά εμπορική ονομασία, μπορεί με ορθογραφικά λάθη ή προσθήκες όπως «-ΧΟΡΗΓΙΑ»).
 Οι περισσότερες είναι τοπικές επιχειρήσεις στη Χαλκίδα και την Εύβοια· κάποιες είναι εθνικές μάρκες που διαφημίζονται μέσω πρακτορείου.
 
-Ψάξε στο ίντερνετ (έως 3 αναζητήσεις) και βρες: τηλέφωνο, email, website, διεύθυνση, κατηγορία δραστηριότητας.
+Ψάξε στο ίντερνετ (έως 3 αναζητήσεις· βάλε «Χαλκίδα» ή «Εύβοια» στην αναζήτηση για τοπικές επιχειρήσεις) και βρες: τηλέφωνο, email, website, διεύθυνση, κατηγορία δραστηριότητας.
 Κανόνες:
 - Γράψε ΜΟΝΟ στοιχεία που είδες στα αποτελέσματα. Ποτέ μην εφευρίσκεις τηλέφωνο ή email. Ό,τι δεν βρήκες = null.
 - Προτίμησε το κατάστημα στη Χαλκίδα / Εύβοια αν υπάρχουν πολλά με το ίδιο όνομα.
@@ -79,7 +79,8 @@ async function call(body: Record<string, unknown>): Promise<ApiResp> {
 export async function lookupBusiness(q: { name: string; hint?: string | null; phone?: string | null; email?: string | null }): Promise<{ info: WebInfo; usage: Usage }> {
   const usage: Usage = { searches: 0, input: 0, output: 0 };
   const tools = [
-    { type: "web_search_20250305", name: "web_search", max_uses: 3, user_location: { type: "approximate", city: "Chalkida", region: "Euboea", country: "GR", timezone: "Europe/Athens" } },
+    // Χωρίς user_location: η Anthropic δεν δέχεται ακόμα «GR». Η περιοχή μπαίνει στο κείμενο της αναζήτησης.
+    { type: "web_search_20250305", name: "web_search", max_uses: 3 },
     RECORD_TOOL,
   ];
   const user = [

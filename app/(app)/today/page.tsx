@@ -121,7 +121,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<Re
       <div className="row" style={{ alignItems: "flex-end" }}>
         <div className="grow">
           <div className="muted" style={{ textTransform: "capitalize" }}>{longDate}</div>
-          <h1 style={{ margin: "2px 0 0" }}>{greeting()}, {profile.full_name.split(" ")[0]}</h1>
+          <h1 style={{ margin: "2px 0 0" }}>{greeting()}, {vocative(profile.first_name ?? profile.full_name)}</h1>
         </div>
         <Link href="/pipeline" className="btn secondary">Pipeline</Link>
         <Link href="/leads/new" className="btn">+ Νέο lead</Link>
@@ -222,6 +222,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<Re
       </div>
     </main>
   );
+}
+
+// «Νίκος» → «Νίκο», «Κώστας» → «Κώστα» (κλητική)
+function vocative(n: string) {
+  const w = n.split(" ")[0];
+  return /ος$/.test(w) ? w.replace(/ος$/, "ο") : /ας$|ης$/.test(w) ? w.slice(0, -1) : w;
 }
 
 // Χαιρετισμός με βάση την ώρα Ελλάδας (ο server της Vercel τρέχει σε ώρα UTC)

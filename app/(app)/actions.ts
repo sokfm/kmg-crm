@@ -497,7 +497,8 @@ export async function webLookup(f: FormData) {
       await enrichCustomer(db, c!);
     }
   } catch (e) {
-    back(path, { error: friendly(e instanceof Error ? e.message : String(e)) });
+    const m = e instanceof Error ? e.message : String(e);
+    back(path, { error: /credit|balance|billing/i.test(m) ? "Τελείωσε η πίστωση της AI (Anthropic Console → Billing)." : /not enabled|permission|web_search/i.test(m) ? "Η αναζήτηση στο ίντερνετ δεν είναι ενεργή στο Anthropic Console (Settings → Privacy/Tools)." : `Η αναζήτηση απέτυχε: ${m.slice(0, 160)}` });
   }
   revalidatePath(path);
   back(path, { ok: "web" });
