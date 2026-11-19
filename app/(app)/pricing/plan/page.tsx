@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { PlanCalculator } from "@/components/PlanCalculator";
-import { priceCol, type PriceCol, type Rate, type Slot } from "@/lib/pricing";
+import { SLOT_SELECT, priceCol, toSlots, type PriceCol, type Rate } from "@/lib/pricing";
 
 export default async function PlanPage() {
   const { supabase } = await requireProfile();
   const [{ data: rates }, { data: slots }] = await Promise.all([
     supabase.from("station_rates").select("station, media_shop_sec, government_sec, local_per_k, direct_per_k").order("sort"),
-    supabase.from("station_slots").select("station, slot, listeners_k, sort").order("sort"),
+    supabase.from("station_slots").select(SLOT_SELECT).order("sort"),
   ]);
   const cols: Record<string, PriceCol[]> = {};
   for (const r of (rates ?? []) as Rate[]) cols[r.station] = [priceCol(r, "local"), priceCol(r, "direct")];
@@ -20,9 +20,9 @@ export default async function PlanPage() {
       </div>
       <p className="muted" style={{ marginTop: 0 }}>
         Πρόχειρος υπολογισμός: δεν αποθηκεύεται. Για να μείνει το πλάνο σε έναν πελάτη, άνοιξε το lead και πάτα «Πρόταση».
-        Η τιμή βγαίνει από τους ακροατές κάθε break (Χαλκίδα - Εύβοια, παλιά έρευνα — δεν υπάρχει νεότερη).
+        Κάθε break έχει τη δική του τιμή ανά δευτερόλεπτο.
       </p>
-      <PlanCalculator cols={cols} slots={((slots ?? []) as Slot[]).map((s) => ({ ...s, listeners_k: Number(s.listeners_k) }))} defaultStart={defaultStart} />
+      <PlanCalculator cols={cols} slots={toSlots(slots)} defaultStart={defaultStart} />
     </main>
   );
 }

@@ -3,17 +3,18 @@ import { notFound, redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { Flash } from "@/components/Flash";
 import { PlanCalculator } from "@/components/PlanCalculator";
-import { CLIENT_LABEL, STATIONS, priceCol, type ClientType, type Grid, type Rate, type Slot } from "@/lib/pricing";
+import { CLIENT_LABEL, SLOT_SELECT, STATIONS, priceCol, toSlots, type ClientType, type Grid, type Rate } from "@/lib/pricing";
 
 export default async function ProposalPlan({
   params, searchParams,
-}: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
-  const { id } = await params;
+}: { params: Promise<{ id: string; pid: string }>; searchParams: Promise<Record<string, string>> }) {
+  const { id, pid } = await params;
+  const base = `/leads/${id}/proposal/${pid}`;
   const sp = await searchParams;
   const { supabase } = await requireProfile();
   const { data: lead } = await supabase.from("leads").select("id, company_name").eq("id", id).maybeSingle();
   if (!lead) notFound();
-  const { data: p } = await supabase.from("proposals").select("id, client_type").eq("lead_id", id).maybeSingle();
+  const { data: p } = await supabase.from("proposals").select("id, client_type, title").eq("id", pid).eq("lead_id", id).maybeSingle();
   if (!p?.client_type) redirect(`/leads/${id}/proposal`);
   const type = p.client_type as ClientType;
 
@@ -22,11 +23,11 @@ export default async function ProposalPlan({
     ? await supabase.from("proposal_items").select("id, station, title, sec, start_date, plan, version").eq("id", sp.item).eq("proposal_id", p.id).eq("kind", "plan").maybeSingle()
     : { data: null };
   const station = item?.station ?? sp.station;
-  if (!station || !(STATIONS as readonly string[]).includes(station)) redirect(`/leads/${id}/proposal`);
+  if (!station || !(STATIONS as readonly string[]).includes(station)) redirect(base);
 
   const [{ data: rate }, { data: slots }] = await Promise.all([
     supabase.from("station_rates").select("station, media_shop_sec, government_sec, local_per_k, direct_per_k").eq("station", station).maybeSingle(),
-    supabase.from("station_slots").select("station, slot, listeners_k, sort").eq("station", station).order("sort"),
+    supabase.from("station_slots").select(SLOT_SELECT).eq("station", station).order("sort"),
   ]);
   if (!rate) notFound();
   const defaultStart = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Athens" }).format(new Date());
@@ -35,7 +36,7 @@ export default async function ProposalPlan({
     <main className="wrap" style={{ maxWidth: 1500 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <h1>Κοστολόγηση πλάνου · {station}</h1>
-        <Link href={`/leads/${id}/proposal`} className="muted">← Πρόταση: {lead.company_name}</Link>
+        <Link href={base} className="muted">← {p.title}: {lead.company_name}</Link>
       </div>
       <Flash sp={sp} />
       <p className="muted" style={{ marginTop: 0 }}>
@@ -43,11 +44,11 @@ export default async function ProposalPlan({
       </p>
       <PlanCalculator
         cols={{ [station]: [priceCol(rate as Rate, type)] }}
-        slots={((slots ?? []) as Slot[]).map((s) => ({ ...s, listeners_k: Number(s.listeners_k) }))}
+        slots={toSlots(slots)}
         defaultStart={defaultStart}
         lockStation={station}
         initial={item ? { grid: (item.plan ?? {}) as Grid, sec: item.sec ?? 30, start: item.start_date, title: item.title.replace(/^Πλάνο: /, "").replace(/^Πλάνο κοστολόγησης$/, "") } : undefined}
-        save={{ leadId: id, itemId: item?.id, version: item?.version }}
+        save={{ leadId: id, proposalId: pid, itemId: item?.id, version: item?.version }}
       />
     </main>
   );

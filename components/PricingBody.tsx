@@ -2,7 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { SubmitButton } from "@/components/SubmitButton";
 import { savePackage, saveSlots, saveStationRates } from "@/app/(app)/actions";
 
-type Rate = { station: string; media_shop_sec: number; government_sec: number; local_per_k: number; direct_per_k: number; version: number };
+type Rate = { station: string; media_shop_sec: number; government_sec: number; version: number };
 const sec = (n: number) => new Intl.NumberFormat("el-GR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n) + " €";
 
 type Pkg = {
@@ -29,14 +29,15 @@ function spotsText(spots: number | null, bonus: number | null) {
   return bonus ? `${spots}+${bonus} δώρο σποτ/ημέρα` : `${spots} σποτ/ημέρα`;
 }
 
-type SlotRow = { station: string; slot: string; listeners_k: number; sort: number };
+type SlotRow = { station: string; slot: string; listeners_k: number; local_sec: number; direct_sec: number; sort: number };
 
 // Ο τιμοκατάλογος. edit=false: μόνο ανάγνωση (σελίδα /pricing). edit=true: Ρυθμίσεις → Κοστολόγηση (Νίκος / Γιάννα).
 export async function PricingBody({ sp, edit }: { sp: Record<string, string>; edit: boolean }) {
-  const { supabase, isAdmin: admin } = await requireProfile();
-  const isAdmin = edit && admin;
+  const { supabase, isAdmin: admin, isCeo: ceo } = await requireProfile();
+  const isAdmin = edit && admin; // πακέτα: Νίκος και Γιάννα
+  const isCeo = edit && ceo;     // τιμές ανά δευτερόλεπτο και break: μόνο ο Νίκος
   const base = edit ? "/settings" : "/pricing";
-  const { data: sd } = isAdmin ? await supabase.from("station_slots").select("station, slot, listeners_k, sort").order("sort") : { data: [] };
+  const { data: sd } = isCeo ? await supabase.from("station_slots").select("station, slot, listeners_k, local_sec, direct_sec, sort").order("sort") : { data: [] };
   const slotRows = (sd ?? []) as SlotRow[];
   const { data } = await supabase.from("price_packages").select("*").order("sort").order("name");
   const all = (data ?? []) as Pkg[];
@@ -56,7 +57,7 @@ export async function PricingBody({ sp, edit }: { sp: Record<string, string>; ed
 
   return (
     <>
-      {edit && <p className="muted" style={{ marginTop: 0 }}>Από εδώ αλλάζουν όλες οι τιμές: τιμή ανά δευτερόλεπτο, ακροατές ανά break και πακέτα. Οι αλλαγές ισχύουν αμέσως για νέες προτάσεις· όσες έχουν ήδη αποθηκευτεί κρατάνε την τιμή που είχαν.</p>}
+      {edit && <p className="muted" style={{ marginTop: 0 }}>{isCeo ? "Από εδώ αλλάζουν όλες οι τιμές: τιμή ανά δευτερόλεπτο, τιμή κάθε break και πακέτα." : "Από εδώ αλλάζουν οι τιμές των πακέτων."} Οι αλλαγές ισχύουν αμέσως για νέες προτάσεις· όσες έχουν ήδη αποθηκευτεί κρατάνε την τιμή που είχαν.</p>}
       <p className="muted" style={{ marginTop: 0 }}>
         Όλες οι τιμές είναι <strong>χωρίς ΦΠΑ</strong>, για σποτ έως 30&apos;&apos;. Ελάχιστη διάρκεια 1 μήνας.
         Από 3 μήνες και πάνω ισχύει το <strong>bonus</strong> με προπληρωμή· χωρίς προπληρωμή ο πελάτης πληρώνει την κανονική τιμή
@@ -64,22 +65,20 @@ export async function PricingBody({ sp, edit }: { sp: Record<string, string>; ed
       </p>
 
       <section className="card stack" style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>Τιμή ανά δευτερόλεπτο</h2>
+        <h2 style={{ margin: 0 }}>Τιμή ανά δευτερόλεπτο: media shops και κρατικές</h2>
         <p className="muted" style={{ margin: 0 }}>
           <strong>Media shop</strong>: η τιμή προς τα πρακτορεία (η επιστροφή τους είναι μέσα σε αυτή). <strong>Κρατικές</strong>: κρατικές διαφημίσεις.
-          <strong> Κοστολόγηση πλάνου</strong>: € ανά δευτερόλεπτο για κάθε 1.000 ακροατές της ώρας (Χαλκίδα - Εύβοια) — τοπικός πελάτης / μεγάλος πελάτης direct.
+          {edit && !isCeo && " Αυτές τις τιμές τις αλλάζει μόνο ο Νίκος."}
         </p>
         <table className="table">
-          <thead><tr><th>Σταθμός</th><th style={{ textAlign: "right" }}>Media shop</th><th style={{ textAlign: "right" }}>Κρατικές</th><th style={{ textAlign: "right" }}>Πλάνο τοπικού / 1.000</th><th style={{ textAlign: "right" }}>Πλάνο direct / 1.000</th>{isAdmin && <th />}</tr></thead>
+          <thead><tr><th>Σταθμός</th><th style={{ textAlign: "right" }}>Media shop</th><th style={{ textAlign: "right" }}>Κρατικές</th>{isCeo && <th />}</tr></thead>
           <tbody>
             {rates.map((r) => (
               <tr key={r.station}>
                 <td><strong>{r.station}</strong></td>
                 <td style={{ textAlign: "right" }}>{sec(r.media_shop_sec)}/sec</td>
                 <td style={{ textAlign: "right" }}>{sec(r.government_sec)}/sec</td>
-                <td style={{ textAlign: "right" }}>{sec(r.local_per_k)}</td>
-                <td style={{ textAlign: "right" }}>{sec(r.direct_per_k)}</td>
-                {isAdmin && (
+                {isCeo && (
                   <td>
                     <details>
                       <summary className="muted" style={{ cursor: "pointer" }}>Αλλαγή</summary>
@@ -88,8 +87,6 @@ export async function PricingBody({ sp, edit }: { sp: Record<string, string>; ed
                         <input type="hidden" name="version" value={r.version} />
                         <label>Media shop €/sec<input name="media_shop_sec" inputMode="decimal" defaultValue={String(r.media_shop_sec)} /></label>
                         <label>Κρατικές €/sec<input name="government_sec" inputMode="decimal" defaultValue={String(r.government_sec)} /></label>
-                        <label>Πλάνο τοπικού<input name="local_per_k" inputMode="decimal" defaultValue={String(r.local_per_k)} /></label>
-                        <label>Πλάνο direct<input name="direct_per_k" inputMode="decimal" defaultValue={String(r.direct_per_k)} /></label>
                         <SubmitButton pending="Αποθήκευση…">Αποθήκευση</SubmitButton>
                       </form>
                     </details>
@@ -102,21 +99,33 @@ export async function PricingBody({ sp, edit }: { sp: Record<string, string>; ed
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>Παράδειγμα: σποτ 30&apos;&apos; στον ΣΟΚ για media shop = 30 × {rates[0] ? sec(rates[0].media_shop_sec) : "—"} = {rates[0] ? eur(30 * rates[0].media_shop_sec) : "—"}.</p>
       </section>
 
-      {isAdmin && (
+      {isCeo && (
         <section className="card stack" style={{ marginBottom: 16 }}>
-          <h2 style={{ margin: 0 }}>Ακροατές ανά break (χιλιάδες)</h2>
-          <p className="muted" style={{ margin: 0 }}>Από αυτούς βγαίνει η τιμή κάθε break στην κοστολόγηση πλάνου. Άνοιξε έναν σταθμό, άλλαξε όσα θέλεις και πάτα Αποθήκευση.</p>
+          <h2 style={{ margin: 0 }}>Τιμή κάθε break ανά δευτερόλεπτο</h2>
+          <p className="muted" style={{ margin: 0 }}>
+            Οι τιμές που χρησιμοποιεί η κοστολόγηση πλάνου. Τις ορίζεις εσύ με το χέρι· κανείς άλλος δεν τις αλλάζει.
+            Άνοιξε έναν σταθμό, άλλαξε όσα break θέλεις και πάτα Αποθήκευση. Οι ακροατές είναι μόνο πληροφορία και δεν αλλάζουν την τιμή.
+          </p>
           {STATIONS.map((st) => (
-            <details key={st}>
-              <summary style={{ cursor: "pointer", fontWeight: 700 }}>{st} <span className="muted" style={{ fontWeight: 500 }}>· σύνολο {slotRows.filter((r) => r.station === st).reduce((a, r) => a + Number(r.listeners_k), 0).toLocaleString("el-GR")}</span></summary>
+            <details key={st} open={sp.st === st}>
+              <summary style={{ cursor: "pointer", fontWeight: 700 }}>{st}</summary>
               <form action={saveSlots} className="stack" style={{ marginTop: 8 }}>
                 <input type="hidden" name="station" value={st} />
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: 6 }}>
-                  {slotRows.filter((r) => r.station === st).map((r) => (
-                    <label key={r.slot} style={{ fontSize: 12 }}>{r.slot}
-                      <input name={`slot_${r.slot}`} inputMode="decimal" defaultValue={String(Number(r.listeners_k))} style={{ padding: "6px 8px" }} />
-                    </label>
-                  ))}
+                <div style={{ overflowX: "auto" }}>
+                  <table className="plan-grid" style={{ width: "auto" }}>
+                    <thead><tr><th>Break</th><th>Τοπική €/sec</th><th>Direct €/sec</th><th>Ακροατές (χιλ.)</th><th style={{ textAlign: "right" }}>Σποτ 30&apos;&apos; τοπικά</th></tr></thead>
+                    <tbody>
+                      {slotRows.filter((r) => r.station === st).map((r) => (
+                        <tr key={r.slot}>
+                          <td><strong>{r.slot}</strong></td>
+                          <td><input name={`l_${r.slot}`} inputMode="decimal" defaultValue={String(Number(r.local_sec))} aria-label={`${r.slot} τοπική τιμή`} style={{ width: 90, padding: "5px 8px" }} /></td>
+                          <td><input name={`d_${r.slot}`} inputMode="decimal" defaultValue={String(Number(r.direct_sec))} aria-label={`${r.slot} direct τιμή`} style={{ width: 90, padding: "5px 8px" }} /></td>
+                          <td><input name={`k_${r.slot}`} inputMode="decimal" defaultValue={String(Number(r.listeners_k))} aria-label={`${r.slot} ακροατές`} style={{ width: 70, padding: "5px 8px" }} /></td>
+                          <td style={{ textAlign: "right" }} className="muted">{eur(30 * Number(r.local_sec))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
                 <div><SubmitButton pending="Αποθήκευση…">Αποθήκευση {st}</SubmitButton></div>
               </form>

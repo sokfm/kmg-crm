@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { itemTotal } from "@/lib/pricing";
 import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
@@ -36,6 +37,14 @@ export default async function CustomerPage({
       .order("period", { ascending: false })
       .limit(sp.all ? 2000 : 24),
   ]);
+  // Όλες οι προτάσεις και τα πλάνα του πελάτη (από όλα τα leads του)
+  const leadIds = (leads ?? []).map((l) => l.id);
+  const { data: propData } = leadIds.length
+    ? await supabase.from("proposals").select("id, lead_id, title, created_at, proposal_items(station, monthly_amount, long_months, long_amount, months)").in("lead_id", leadIds).order("created_at", { ascending: false })
+    : { data: [] };
+  const custProps = ((propData ?? []) as { id: string; lead_id: string; title: string; created_at: string; proposal_items: { station: string; monthly_amount: number; long_months: number | null; long_amount: number | null; months: number }[] }[])
+    .map((p) => ({ ...p, total: p.proposal_items.reduce((x, i) => x + itemTotal(i).total, 0), stations: [...new Set(p.proposal_items.map((i) => i.station))] }));
+
 
   // Οι αυθεντικές εγγραφές του Excel (όνομα / Account Executive / Agent), ομαδοποιημένες
   const { data: rawLines } = await supabase.from("history_lines")
@@ -264,6 +273,20 @@ export default async function CustomerPage({
           </table>
         )}
       </div>
+
+      {custProps.length > 0 && (
+        <div className="card">
+          <h2>Προτάσεις ({custProps.length})</h2>
+          <div className="list">
+            {custProps.map((p) => (
+              <Link key={p.id} href={`/leads/${p.lead_id}/proposal/${p.id}`} className="item">
+                <div className="grow"><strong>{p.title}</strong> <span className="muted">· {dateGr(p.created_at)}{p.stations.length ? ` · ${p.stations.join(" · ")}` : ""}</span></div>
+                <span className="badge">{eur(p.total)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {leads && leads.length > 0 && (
         <div className="card">

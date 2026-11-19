@@ -45,9 +45,9 @@ export default async function LeadPage({
   const people = (peopleData ?? []) as { id: string; full_name: string }[];
   const { data: contactData } = await supabase.from("contacts").select(PERSON_SELECT).eq("lead_id", id);
   const persons = (contactData ?? []) as Person[];
-  const { data: prop } = await supabase.from("proposals").select("client_type, proposal_items(station, monthly_amount, long_months, long_amount, months)").eq("lead_id", id).maybeSingle();
-  const propItems = ((prop?.proposal_items ?? []) as Pick<Item, "station" | "monthly_amount" | "long_months" | "long_amount" | "months">[]);
-  const propTotal = propItems.reduce((a, i) => a + itemTotal(i).total, 0);
+  const { data: propData } = await supabase.from("proposals").select("id, title, client_type, is_main, proposal_items(station, monthly_amount, long_months, long_amount, months)").eq("lead_id", id).order("created_at", { ascending: false });
+  const props = ((propData ?? []) as { id: string; title: string; client_type: ClientType | null; is_main: boolean; proposal_items: Pick<Item, "station" | "monthly_amount" | "long_months" | "long_amount" | "months">[] }[])
+    .map((p) => ({ ...p, total: p.proposal_items.reduce((x, i) => x + itemTotal(i).total, 0), stations: [...new Set(p.proposal_items.map((i) => i.station))] }));
   const interests = ((lead.interests as string[] | null) ?? [lead.product_line]) as string[];
 
   // Αν το lead αφορά υπάρχοντα πελάτη: το ιστορικό του από την τιμολόγηση
@@ -269,19 +269,18 @@ export default async function LeadPage({
             <NewTaskForm back={`/leads/${lead.id}`} leadId={lead.id} />
           </div>
           <div className="card stack">
-            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-              <h2 style={{ margin: 0 }}>Πρόταση</h2>
-              {prop?.client_type && <span className="badge gray">{CLIENT_LABEL[prop.client_type as ClientType]}</span>}
-            </div>
-            {propItems.length ? (
-              <>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{eur(propTotal)}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{[...new Set(propItems.map((i) => i.station))].join(" · ")} · {propItems.length} {propItems.length === 1 ? "γραμμή" : "γραμμές"} · χωρίς ΦΠΑ</div>
-              </>
-            ) : (
-              <p className="muted" style={{ margin: 0 }}>Στήσε τα νούμερα: μέσο, πακέτο ή κοστολόγηση πλάνου, διάρκεια.</p>
-            )}
-            <div><Link href={`/leads/${lead.id}/proposal`} className="btn">{propItems.length ? "Άνοιγμα πρότασης" : "Νέα πρόταση"}</Link></div>
+            <h2 style={{ margin: 0 }}>Προτάσεις ({props.length})</h2>
+            {props.length === 0 && <p className="muted" style={{ margin: 0 }}>Στήσε τα νούμερα: μέσο, πακέτο ή κοστολόγηση πλάνου, διάρκεια.</p>}
+            {props.map((p) => (
+              <Link key={p.id} href={`/leads/${lead.id}/proposal/${p.id}`} className="row" style={{ justifyContent: "space-between", gap: 8, color: "inherit", border: "1px solid #ebe8ef", borderRadius: 10, padding: "8px 10px" }}>
+                <span>
+                  <strong>{p.title}</strong> {p.is_main && <span className="badge good">Κύρια</span>}
+                  <br /><span className="muted" style={{ fontSize: 12.5 }}>{p.client_type ? CLIENT_LABEL[p.client_type] : ""}{p.stations.length ? ` · ${p.stations.join(" · ")}` : " · άδεια"}</span>
+                </span>
+                <strong>{eur(p.total)}</strong>
+              </Link>
+            ))}
+            <div><Link href={`/leads/${lead.id}/proposal`} className="btn">{props.length ? "Νέα ή όλες οι προτάσεις" : "Νέα πρόταση"}</Link></div>
           </div>
           <PeopleCard people={persons} leadId={lead.id} back={`/leads/${lead.id}`} canEdit />
           <div className="card sf-fields">

@@ -406,10 +406,39 @@ do $$ begin
   assert (select count(*) from proposals where lead_id = 'b0000000-0000-0000-0000-000000000001') = 0, 'άλλος πωλητής βλέπει ξένη πρόταση';
 end $$;
 select as_user(1);
-select set_station_slots('ΣΟΚ FM', '{"08:30": 13}'::jsonb);
+select set_station_slots('ΣΟΚ FM', '{"08:30": {"l": 0.2, "d": 0.4}}'::jsonb);
 do $$ begin
-  assert (select listeners_k from station_slots where station = 'ΣΟΚ FM' and slot = '08:30') = 13, 'admin δεν άλλαξε ακροατές';
+  assert (select local_sec from station_slots where station = 'ΣΟΚ FM' and slot = '08:30') = 0.2, 'ο Νίκος δεν άλλαξε τιμή break';
 end $$;
 reset role;
+
+-- 25. Τιμές break μόνο ο Νίκος (ούτε η Γιάννα)· πολλές προτάσεις, η κύρια γράφει την αξία του lead
+select as_user(2);
+do $$ begin
+  begin perform set_station_slots('ΣΟΚ FM', '{"10:30": {"l": 9}}'::jsonb); assert false, 'η Γιάννα άλλαξε τιμή break';
+  exception when insufficient_privilege then null; end;
+end $$;
+update station_rates set media_shop_sec = 9 where station = 'DALKAS';
+update price_packages set price = 720 where name = 'Πακέτο 6';
+reset role;
+do $$ begin
+  assert (select media_shop_sec from station_rates where station = 'DALKAS') = 0.25, 'η Γιάννα άλλαξε τιμή ανά δευτερόλεπτο';
+  assert (select price from price_packages where name = 'Πακέτο 6') = 720, 'η Γιάννα δεν άλλαξε τιμή πακέτου';
+  assert (select expected_value from leads where id = 'b0000000-0000-0000-0000-000000000001') = 1200, 'η κύρια πρόταση δεν έγραψε την αξία (400 x 3)';
+end $$;
+select as_user(3);
+insert into proposals (id, lead_id, client_type, title) values ('b1000000-0000-0000-0000-000000000002','b0000000-0000-0000-0000-000000000001','local','Ανανέωση');
+insert into proposal_items (proposal_id, station, kind, title, monthly_amount, long_months, long_amount, months) values ('b1000000-0000-0000-0000-000000000002','DALKAS','package','Πακέτο 6+1',400,3,350,3);
+reset role;
+do $$ begin
+  assert (select expected_value from leads where id = 'b0000000-0000-0000-0000-000000000001') = 1200, 'δεύτερη πρόταση άλλαξε την αξία χωρίς να είναι κύρια';
+end $$;
+select as_user(3);
+select set_main_proposal('b1000000-0000-0000-0000-000000000002');
+reset role;
+do $$ begin
+  assert (select expected_value from leads where id = 'b0000000-0000-0000-0000-000000000001') = 1050, 'η νέα κύρια δεν έγραψε την αξία με bonus (350 x 3)';
+  assert (select count(*) from proposals where lead_id = 'b0000000-0000-0000-0000-000000000001' and is_main) = 1, 'πάνω από μία κύρια';
+end $$;
 
 select 'ALL TESTS PASSED' as result;

@@ -677,15 +677,15 @@ export async function savePackage(f: FormData) {
 }
 
 export async function saveStationRates(f: FormData) {
-  const { supabase, isAdmin } = await requireProfile();
-  if (!isAdmin) back("/settings", { tab: "pricing", error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
+  const { supabase, isCeo } = await requireProfile();
+  if (!isCeo) back("/settings", { tab: "pricing", error: "Αυτές τις τιμές τις αλλάζει μόνο ο Νίκος" });
   const num = (k: string) => {
     const v = s(f, k);
     if (v == null) return null;
     const n = Number(v.replace(",", "."));
     return Number.isFinite(n) && n >= 0 ? n : null;
   };
-  const row = { media_shop_sec: num("media_shop_sec"), government_sec: num("government_sec"), local_per_k: num("local_per_k"), direct_per_k: num("direct_per_k") };
+  const row = { media_shop_sec: num("media_shop_sec"), government_sec: num("government_sec") };
   if (Object.values(row).some((v) => v == null)) back("/settings", { tab: "pricing", error: "Συμπλήρωσε όλες τις τιμές (π.χ. 0,35)" });
   const { data, error } = await supabase.from("station_rates").update(row).eq("station", s(f, "station")).eq("version", Number(s(f, "version"))).select("station");
   revalidatePath("/pricing"); revalidatePath("/settings");
@@ -694,18 +694,21 @@ export async function saveStationRates(f: FormData) {
   back("/settings", { tab: "pricing", ok: "pkgsaved" });
 }
 
+// Τιμή κάθε break ανά δευτερόλεπτο (τοπική, direct) και ακροατές: μόνο ο Νίκος
 export async function saveSlots(f: FormData) {
-  const { supabase, isAdmin } = await requireProfile();
-  if (!isAdmin) back("/settings", { error: "Τις τιμές αλλάζουν μόνο ο Νίκος και η Γιάννα" });
-  const values: Record<string, number> = {};
+  const { supabase, isCeo } = await requireProfile();
+  const station = s(f, "station") ?? "";
+  if (!isCeo) back("/settings", { tab: "pricing", error: "Τις τιμές των break τις αλλάζει μόνο ο Νίκος" });
+  const values: Record<string, Record<string, number>> = {};
   for (const [k, v] of f.entries()) {
-    if (!k.startsWith("slot_")) continue;
-    const n = Number(String(v).replace(",", "."));
-    if (!Number.isFinite(n) || n < 0 || n > 500) back("/settings", { tab: "pricing", error: `Λάθος αριθμός στο ${k.slice(5)}` });
-    values[k.slice(5)] = n;
+    const m = /^([ldk])_(.+)$/.exec(k);
+    if (!m) continue;
+    const n = Number(String(v).trim().replace(",", "."));
+    if (String(v).trim() === "" || !Number.isFinite(n) || n < 0 || n > 500) back("/settings", { tab: "pricing", st: station, error: `Λάθος αριθμός στο break ${m[2]}` });
+    (values[m[2]] ??= {})[m[1]] = n;
   }
-  const { error } = await supabase.rpc("set_station_slots", { p_station: s(f, "station"), p_values: values });
+  const { error } = await supabase.rpc("set_station_slots", { p_station: station, p_values: values });
   revalidatePath("/pricing"); revalidatePath("/settings");
-  if (error) back("/settings", { tab: "pricing", error: friendly(error.message) });
-  back("/settings", { tab: "pricing", ok: "pkgsaved" });
+  if (error) back("/settings", { tab: "pricing", st: station, error: friendly(error.message) });
+  back("/settings", { tab: "pricing", st: station, ok: "pkgsaved" });
 }

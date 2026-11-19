@@ -10,7 +10,7 @@ const num = (n: number, d = 4) => n.toLocaleString("el-GR", { maximumFractionDig
 const DOW = ["Κ", "Δ", "ΤΡ", "ΤΕ", "Π", "ΠΑ", "Σ"];
 const MAX = 3; // μέγιστα σποτ ανά break ανά ημέρα με το κλικ
 
-type Save = { leadId: string; itemId?: string; version?: number };
+type Save = { leadId: string; proposalId: string; itemId?: string; version?: number };
 type Props = {
   cols: Record<string, PriceCol[]>; // σταθμός → στήλες τιμής που φαίνονται
   slots: Slot[];
@@ -74,7 +74,7 @@ export function PlanCalculator({ cols, slots, defaultStart, lockStation, initial
     for (const r of rows) {
       let n = 0;
       for (let d = 0; d < nDays; d++) { const v = grid[r.slot]?.[d] ?? 0; n += v; perDay[d] += v; }
-      const cost = priceCols.map((c) => n * secPrice(c, r.listeners_k) * seconds);
+      const cost = priceCols.map((c) => n * secPrice(c, r) * seconds);
       perRow[r.slot] = { n, cost };
       spots += n;
       cost.forEach((c, i) => { totals[i] += c; });
@@ -133,7 +133,7 @@ export function PlanCalculator({ cols, slots, defaultStart, lockStation, initial
                   <tr key={r.slot} style={pr?.n ? { background: "var(--brand-bg)" } : undefined}>
                     <td onClick={() => fillRow(r.slot)} style={{ position: "sticky", left: 0, background: pr?.n ? "#fbe7f8" : "#fff", fontWeight: 700, cursor: "pointer", zIndex: 1 }}>{r.slot}</td>
                     <td style={{ textAlign: "right" }}>{num(r.listeners_k, 2)}</td>
-                    {priceCols.map((c) => <td key={c.label} style={{ textAlign: "right" }}>{num(secPrice(c, r.listeners_k))}</td>)}
+                    {priceCols.map((c) => <td key={c.label} style={{ textAlign: "right" }}>{num(secPrice(c, r))}</td>)}
                     <td style={{ textAlign: "right", fontWeight: 700 }}>{pr?.n || ""}</td>
                     {days.map((w, d) => {
                       const v = cell(r.slot, d);
@@ -164,7 +164,7 @@ export function PlanCalculator({ cols, slots, defaultStart, lockStation, initial
 
       {save ? (
         <form action={savePlanItem} className="card row" style={{ gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <input type="hidden" name="lead_id" value={save.leadId} />
+          <input type="hidden" name="lead_id" value={save.leadId} /><input type="hidden" name="proposal_id" value={save.proposalId} />
           {save.itemId && <><input type="hidden" name="item_id" value={save.itemId} /><input type="hidden" name="version" value={save.version ?? 1} /></>}
           <input type="hidden" name="station" value={station} />
           <input type="hidden" name="sec" value={seconds} />
@@ -179,7 +179,7 @@ export function PlanCalculator({ cols, slots, defaultStart, lockStation, initial
             {t.spots} σποτ × {seconds}&apos;&apos; · μέση τιμή σποτ {t.spots ? eur((t.totals[0] ?? 0) / t.spots) : "—"} € · ανά sec {totalSec ? num((t.totals[0] ?? 0) / totalSec) : "—"} €
           </div>
           <span style={{ flex: 1 }} />
-          <a href={`/leads/${save.leadId}/proposal`} className="btn secondary">Άκυρο</a>
+          <a href={`/leads/${save.leadId}/proposal/${save.proposalId}`} className="btn secondary">Άκυρο</a>
           <SubmitButton pending="Αποθήκευση…">Αποθήκευση στην πρόταση</SubmitButton>
         </form>
       ) : (
