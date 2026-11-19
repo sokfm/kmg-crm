@@ -266,7 +266,8 @@ export default async function LeadPage({
           <div className="card sf-fields">
             <h2>Πληροφορίες</h2>
             <div><span>Πηγή</span>{SOURCES[lead.source] ?? lead.source}</div>
-            <div><span>Είδος</span>{lead.product_line === "digital" ? "Digital" : "Ράδιο"}</div>
+            <div><span>Κλάδος επιχείρησης</span>{lead.category ?? "—"}</div>
+            <div><span>Ζητάει διαφήμιση σε</span>{lead.product_line === "digital" ? "Digital / social" : "Ραδιόφωνο"}</div>
             <div><span>Σταθμοί</span>{(lead.stations ?? []).join(", ") || "—"}</div>
             <div><span>Περιοχή</span>{lead.area ?? "—"}</div>
             <div><span>Email</span>{lead.email ? <a href={`mailto:${lead.email}`}>{lead.email}</a> : "—"}</div>

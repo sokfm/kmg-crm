@@ -65,7 +65,7 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
               <option value="competition_watch">Ακούστηκε σε άλλον σταθμό</option>
             </select>
           </label>
-          <label>Τι αφορά
+          <label>Ζητάει διαφήμιση σε
             <select name="product_line" defaultValue={sp.product_line ?? "radio"}>
               <option value="radio">Ραδιόφωνο</option>
               <option value="digital">Digital / social</option>
