@@ -45,7 +45,7 @@ export default async function CustomerPage({
         <Link href="/customers" className="muted">← Πελάτες</Link>
         <h1>{c.display_name}</h1>
         <div className="muted">
-          {CHANNEL[c.channel]}{c.agency ? ` · ${c.agency}` : ""} · {c.status === "base" ? "Στη βάση" : "Ενεργός"} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
+          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {c.status === "base" ? "Στη βάση" : "Ενεργός"} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
         </div>
       </div>
       <Flash sp={sp} />

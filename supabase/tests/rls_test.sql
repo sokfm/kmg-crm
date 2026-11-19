@@ -180,4 +180,27 @@ do $$ begin
   assert (select done_at from tasks where title='Πρόταση στον ΠΑΛΟΚΑ') is not null, 'δεν μπήκε ώρα ολοκλήρωσης';
 end $$;
 
+-- 13. Πρακτορεία: η επικοινωνία πάει στην καρτέλα του πρακτορείου, την βλέπουν admin + ο καταγράφων
+reset role;
+insert into agencies (id, name, domains) values ('30000000-0000-0000-0000-000000000001','TEST AGENCY','{@test-agency.gr}');
+select as_user(1);
+insert into activities (agency_id, type, summary) values ('30000000-0000-0000-0000-000000000001','email','📥 Πρόγραμμα σποτ');
+select as_user(3);
+do $$ begin
+  assert (select count(*) from activities where agency_id is not null) = 0, 'πωλητής βλέπει επικοινωνία πρακτορείου άλλου';
+  assert (select count(*) from agencies where name='TEST AGENCY') = 1, 'πωλητής δεν βλέπει τα ονόματα πρακτορείων';
+end $$;
+do $$ begin
+  begin
+    update agencies set domains = '{@x.gr}' where name='TEST AGENCY';
+    assert not found, 'πωλητής άλλαξε πρακτορείο';
+  end;
+end $$;
+select as_user(2);
+do $$ begin
+  assert (select count(*) from activities where agency_id is not null) = 1, 'η Γιάννα δεν βλέπει επικοινωνία πρακτορείου';
+  assert agency_canonical('Frank and Fame ΑΕ') = 'FRANK & FAME' and agency_canonical('NAN') is null, 'λάθος ενιαίο όνομα πρακτορείου';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

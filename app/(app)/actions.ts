@@ -103,12 +103,14 @@ export async function addActivity(f: FormData) {
   const { supabase } = await requireProfile();
   const leadId = s(f, "lead_id");
   const customerId = s(f, "customer_id");
-  const path = leadId ? `/leads/${leadId}` : `/customers/${customerId}`;
+  const agencyId = s(f, "agency_id");
+  const path = leadId ? `/leads/${leadId}` : agencyId ? `/agencies/${agencyId}` : `/customers/${customerId}`;
   const summary = s(f, "summary");
   if (!summary) back(path, { error: "Γράψε τι έγινε" });
   const { error } = await supabase.from("activities").insert({
     lead_id: leadId,
     customer_id: customerId,
+    agency_id: agencyId,
     type: s(f, "type") ?? "call",
     summary,
   });
@@ -204,6 +206,7 @@ export async function createTask(f: FormData) {
     owner_id: isAdmin ? s(f, "owner_id") ?? profile.id : profile.id,
     customer_id: s(f, "customer_id"),
     lead_id: s(f, "lead_id"),
+    agency_id: s(f, "agency_id"),
   });
   revalidatePath(backTo);
   if (error) back(backTo, { error: friendly(error.message) });
@@ -286,6 +289,53 @@ export async function reviewAsCustomer(f: FormData) {
   revalidatePath("/inbox");
   if (error) back("/inbox", { error: friendly(error.message) });
   back("/inbox", { ok: "linked" });
+}
+
+// Email πρακτορείου → στην καρτέλα του πρακτορείου. Προαιρετικά μαθαίνει το domain,
+// ώστε όλα τα επόμενα από το ίδιο πρακτορείο να μπαίνουν εκεί αυτόματα.
+export async function reviewAsAgency(f: FormData) {
+  const { supabase, isAdmin, em } = await loadReviewEmail(s(f, "id")!);
+  let agencyId = s(f, "agency_id");
+  const newName = s(f, "new_name")?.toUpperCase();
+  if (newName) {
+    if (!isAdmin) back("/inbox", { error: "Νέο πρακτορείο προσθέτει μόνο ο Νίκος ή η Γιάννα" });
+    const { data: a, error } = await supabase.from("agencies").upsert({ name: newName }, { onConflict: "name" }).select("id").single();
+    if (error || !a) back("/inbox", { error: friendly(error?.message) });
+    agencyId = a!.id;
+  }
+  if (!agencyId) back("/inbox", { error: "Διάλεξε πρακτορείο" });
+  const domain = em.counterpart_email.slice(em.counterpart_email.indexOf("@")).toLowerCase();
+  const generic = /@(gmail|yahoo|hotmail|outlook|live|otenet|windowslive|icloud)\./.test(domain);
+  if (s(f, "remember") === "1" && isAdmin && !generic) {
+    const { data: a } = await supabase.from("agencies").select("domains").eq("id", agencyId!).single();
+    const domains = Array.from(new Set([...(a?.domains ?? []), domain]));
+    await supabase.from("agencies").update({ domains }).eq("id", agencyId!);
+  }
+  await supabase.from("email_messages").update({ status: "logged", agency_id: agencyId, decided_at: new Date().toISOString() }).eq("id", em.id);
+  const { error } = await supabase.from("activities").insert({
+    agency_id: agencyId,
+    type: "email",
+    summary: `${em.direction === "in" ? "📥" : "📤"} ${em.subject}${em.summary ? " — " + em.summary : ""}`,
+    occurred_at: em.occurred_at,
+    email_message_id: em.id,
+  });
+  revalidatePath("/inbox");
+  if (error) back("/inbox", { error: friendly(error.message) });
+  back("/inbox", { ok: "agency" });
+}
+
+export async function updateAgencyDomains(f: FormData) {
+  const { supabase } = await requireProfile();
+  const id = s(f, "id")!;
+  const domains = (s(f, "domains") ?? "")
+    .split(/[\s,;]+/)
+    .map((d) => d.trim().toLowerCase().replace(/^.*@/, "").replace(/^www\./, ""))
+    .filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d))
+    .map((d) => "@" + d);
+  const { error } = await supabase.from("agencies").update({ domains: Array.from(new Set(domains)) }).eq("id", id);
+  revalidatePath(`/agencies/${id}`);
+  if (error) back(`/agencies/${id}`, { error: friendly(error.message) });
+  back(`/agencies/${id}`, { ok: "saved" });
 }
 
 export async function reviewIgnore(f: FormData) {

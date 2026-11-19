@@ -11,13 +11,15 @@ export type TaskRow = {
   source: string;
   customer_id: string | null;
   lead_id: string | null;
+  agency_id?: string | null;
+  agencies?: { name: string } | null;
   owner?: { full_name: string } | null;
   customers?: { display_name: string } | null;
   leads?: { company_name: string } | null;
 };
 
 export const TASK_SELECT =
-  "id, title, due_date, status, source, customer_id, lead_id, owner:profiles!tasks_owner_id_fkey(full_name), customers(display_name), leads(company_name)";
+  "id, title, due_date, status, source, customer_id, lead_id, owner:profiles!tasks_owner_id_fkey(full_name), customers(display_name), leads(company_name), agency_id, agencies(name)";
 
 // Λίστα εργασιών με κουμπί ολοκλήρωσης. Χρησιμοποιείται στο Σήμερα, στις Εργασίες και στις καρτέλες.
 export function TaskList({ tasks, back, showOwner = false, showTarget = true }: { tasks: TaskRow[]; back: string; showOwner?: boolean; showTarget?: boolean }) {
@@ -31,6 +33,8 @@ export function TaskList({ tasks, back, showOwner = false, showTarget = true }: 
           <Link href={`/customers/${k.customer_id}`}>{k.customers?.display_name ?? "πελάτης"}</Link>
         ) : k.lead_id ? (
           <Link href={`/leads/${k.lead_id}`}>{k.leads?.company_name ?? "lead"}</Link>
+        ) : k.agency_id ? (
+          <Link href={`/agencies/${k.agency_id}`}>🏢 {k.agencies?.name ?? "πρακτορείο"}</Link>
         ) : null;
         return (
           <div key={k.id} className={`item ${late ? "late" : ""}`} style={k.status === "done" ? { opacity: 0.55 } : undefined}>
@@ -60,14 +64,15 @@ export function TaskList({ tasks, back, showOwner = false, showTarget = true }: 
 }
 
 export function NewTaskForm({
-  back, customerId, leadId, people,
-}: { back: string; customerId?: string; leadId?: string; people?: { id: string; full_name: string }[] }) {
+  back, customerId, leadId, agencyId, people,
+}: { back: string; customerId?: string; leadId?: string; agencyId?: string; people?: { id: string; full_name: string }[] }) {
   const in2 = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   return (
     <form action={createTask} className="row">
       <input type="hidden" name="back" value={back} />
       {customerId && <input type="hidden" name="customer_id" value={customerId} />}
       {leadId && <input type="hidden" name="lead_id" value={leadId} />}
+      {agencyId && <input type="hidden" name="agency_id" value={agencyId} />}
       <input name="title" className="grow" placeholder="Νέα εργασία, π.χ. Αποστολή πρότασης" required />
       <input name="due_date" type="date" defaultValue={in2} />
       {people && people.length > 0 && (

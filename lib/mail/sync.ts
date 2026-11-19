@@ -12,7 +12,8 @@ const LEAD_THRESHOLD = 0.85;
 const PER_FOLDER = 20;
 
 type Account = { user_id: string; ms_email: string; refresh_token: string; inbox_since: string; sent_since: string };
-type Match = { customer_id: string | null; lead_id: string | null; label: string } | null;
+type Target = { customer_id: string | null; lead_id: string | null; agency_id?: string | null };
+type Match = (Target & { label: string }) | null;
 export type SyncResult = { user: string; logged: number; leads: number; review: number; tasks: number; skipped: number; error?: string };
 
 const lower = (s?: string | null) => (s ?? "").trim().toLowerCase();
@@ -28,6 +29,10 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
       await db.from("mail_accounts").update({ refresh_token: tok.refresh_token }).eq("user_id", acc.user_id);
     }
     const ignored = new Set(((await db.from("ignored_senders").select("pattern")).data ?? []).map((r) => lower(r.pattern)));
+    // Πρακτορεία: domain → πρακτορείο. Ό,τι έρχεται από εκεί πάει στην καρτέλα του πρακτορείου.
+    const agencyByDomain = new Map<string, { id: string; name: string }>();
+    for (const a of ((await db.from("agencies").select("id, name, domains")).data ?? []) as { id: string; name: string; domains: string[] }[])
+      for (const d of a.domains ?? []) agencyByDomain.set(lower(d), { id: a.id, name: a.name });
     const own = lower(acc.ms_email);
     const internal = new Set([...INTERNAL_DOMAINS.map((d) => "@" + d), domainOf(own)]);
 
@@ -63,7 +68,10 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
         const { data: seen } = await db.from("email_messages").select("id").eq("user_id", acc.user_id).eq("graph_id", m.id).maybeSingle();
         if (seen) continue;
 
-        const match = await findMatch(db, other.email);
+        const ag = agencyByDomain.get(domainOf(other.email));
+        const match: Match = ag
+          ? { customer_id: null, lead_id: null, agency_id: ag.id, label: `πρακτορείο ${ag.name}` }
+          : await findMatch(db, other.email);
         let verdict: EmailVerdict;
         try {
           verdict = await judgeEmail({
@@ -112,7 +120,7 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
         if (match) {
           const { data: em } = await db
             .from("email_messages")
-            .insert({ ...base, status: "logged", customer_id: match.customer_id, lead_id: match.lead_id, decided_at: new Date().toISOString() })
+            .insert({ ...base, status: "logged", customer_id: match.customer_id, lead_id: match.lead_id, agency_id: match.agency_id ?? null, decided_at: new Date().toISOString() })
             .select("id")
             .single();
           await logActivity(db, acc.user_id, em!.id, isIn, base.subject, verdict.summary, when, match);
@@ -204,12 +212,13 @@ export async function logActivity(
   subject: string,
   summary: string | null,
   when: string,
-  target: { customer_id: string | null; lead_id: string | null },
+  target: Target,
 ) {
   await db.from("activities").insert({
     user_id: userId,
     lead_id: target.lead_id,
     customer_id: target.lead_id ? null : target.customer_id,
+    agency_id: target.agency_id ?? null,
     type: "email",
     summary: `${isIn ? "📥" : "📤"} ${subject}${summary ? " — " + summary : ""}`,
     occurred_at: when,
@@ -222,7 +231,7 @@ async function makeTasks(
   userId: string,
   emailId: string,
   verdict: { tasks: { title: string; due_date: string | null }[] },
-  target: { customer_id: string | null; lead_id: string | null },
+  target: Target,
 ) {
   if (!verdict.tasks.length) return 0;
   await db.from("tasks").insert(
@@ -233,6 +242,7 @@ async function makeTasks(
       created_by: userId,
       customer_id: target.customer_id,
       lead_id: target.lead_id,
+      agency_id: target.agency_id ?? null,
       email_message_id: emailId,
       source: "email",
     })),

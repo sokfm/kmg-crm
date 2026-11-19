@@ -3,7 +3,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { dateGr } from "@/lib/format";
 import { Flash } from "@/components/Flash";
-import { reviewAsCustomer, reviewAsLead, reviewIgnore } from "../actions";
+import { reviewAsAgency, reviewAsCustomer, reviewAsLead, reviewIgnore } from "../actions";
 
 const KIND: Record<string, string> = {
   new_lead: "Πιθανό νέο lead",
@@ -39,6 +39,19 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<Re
     ? await supabase.from("profiles").select("id, full_name").in("role", ["ceo", "sales_manager", "account_exec"]).eq("active", true)
     : { data: [] as { id: string; full_name: string }[] };
 
+  const { data: agencyData } = await supabase.from("agencies").select("id, name, domains").order("name");
+  const agencies = (agencyData ?? []) as { id: string; name: string; domains: string[] }[];
+  const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9α-ω]/g, "");
+  // Ποιο πρακτορείο ταιριάζει: από τη διεύθυνση (umedia.gr ↔ U MEDIA) ή από το όνομα του αποστολέα
+  const guessAgency = (e: Em) => {
+    const dom = e.counterpart_email.slice(e.counterpart_email.indexOf("@")).toLowerCase();
+    const word = squash(dom.slice(1).split(".")[0]);
+    return (
+      agencies.find((a) => a.domains?.includes(dom)) ??
+      agencies.find((a) => squash(a.name).length >= 2 && (word === squash(a.name) || word.startsWith(squash(a.name)) || squash(a.name).startsWith(word)))
+    )?.id ?? "";
+  };
+
   // Υποψήφιοι πελάτες για κάθε email (ή αναζήτηση που έκανε ο χρήστης)
   const candidates: Record<string, { id: string; display_name: string; status: string }[]> = {};
   for (const e of items) {
@@ -68,6 +81,29 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<Re
           <div><strong>{e.subject}</strong></div>
           {e.summary && <div>{e.summary}</div>}
           {e.ai_reason && <div className="muted">AI: {e.ai_reason}</div>}
+
+          <details open={e.ai_kind === "agency" || !!guessAgency(e)}>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏢 Αφορά πρακτορείο</summary>
+            <form action={reviewAsAgency} className="stack" style={{ marginTop: 8 }}>
+              <input type="hidden" name="id" value={e.id} />
+              <div className="grid2">
+                <label>Πρακτορείο
+                  <select name="agency_id" defaultValue={guessAgency(e)}>
+                    <option value="">Διάλεξε…</option>
+                    {agencies.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </label>
+                {isAdmin && <label>…ή νέο πρακτορείο<input name="new_name" placeholder="Όνομα, αν δεν υπάρχει στη λίστα" /></label>}
+              </div>
+              {isAdmin && (
+                <label className="row" style={{ flexDirection: "row", fontWeight: 400 }}>
+                  <input type="checkbox" name="remember" value="1" defaultChecked />
+                  Όλα τα email από {e.counterpart_email.split("@")[1]} να μπαίνουν αυτόματα σε αυτό το πρακτορείο
+                </label>
+              )}
+              <SubmitButton>Στην καρτέλα του πρακτορείου</SubmitButton>
+            </form>
+          </details>
 
           <details>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>➕ Είναι νέο lead</summary>
@@ -104,7 +140,7 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<Re
               )}
               <label className="row" style={{ flexDirection: "row", fontWeight: 400 }}>
                 <input type="checkbox" name="remember" value="1" defaultChecked={e.ai_kind !== "agency"} />
-                Να θυμάσαι αυτή τη διεύθυνση για αυτόν τον πελάτη {e.ai_kind === "agency" && "(όχι για πρακτορεία που στέλνουν για πολλούς)"}
+                Να θυμάσαι αυτή τη διεύθυνση για αυτόν τον πελάτη
               </label>
               {candidates[e.id].length > 0 && <SubmitButton>Σύνδεση με τον πελάτη</SubmitButton>}
             </form>
