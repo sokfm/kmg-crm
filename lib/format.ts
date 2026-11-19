@@ -63,3 +63,10 @@ export function customerState(c: { last_period: string | null; closed_at?: strin
   if (p && p >= monthsAgo(36)) return { key: "inactive", label: "Inactive", cls: "gray" };
   return { key: "dormant", label: p ? "Dormant" : "Χωρίς καμπάνια", cls: "faint" };
 }
+
+// Account Executive όπως το λέμε: χρήστης του CRM, ή το media shop για πελάτες πρακτορείου.
+export function aeLabel(c: { status: string; served_by: string | null; profiles?: { full_name: string } | null }, short = false) {
+  if (c.profiles?.full_name) return short ? c.profiles.full_name.split(" ")[0] : c.profiles.full_name;
+  if (c.status === "active" && c.served_by?.startsWith("Media shop")) return c.served_by;
+  return null;
+}

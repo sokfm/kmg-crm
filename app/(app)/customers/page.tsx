@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
-import { CHANNEL, customerState, eur, monthsAgo, periodGr } from "@/lib/format";
+import { CHANNEL, aeLabel, customerState, eur, monthsAgo, periodGr } from "@/lib/format";
 import { claimCustomer, decideClaim } from "../actions";
 import { Flash } from "@/components/Flash";
 
@@ -39,7 +39,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   if (status === "recent") q = q.gte("last_period", monthsAgo(12)).lt("last_period", monthsAgo(0));
   if (status === "inactive") q = q.gte("last_period", monthsAgo(36)).lt("last_period", monthsAgo(12));
   if (status === "dormant") q = q.or(`last_period.lt.${monthsAgo(36)},last_period.is.null`);
-  if (status === "base") q = q.is("owner_id", null);
+  if (status === "base") q = q.eq("status", "base");
   if (status === "mine") q = q.eq("owner_id", profile.id);
   if (year === "never") q = q.is("last_period", null);
   else if (/^\d{4}$/.test(year)) q = q.gte("last_period", `${year}-01`).lte("last_period", `${year}-12`);
@@ -169,14 +169,14 @@ export default async function Customers({ searchParams }: { searchParams: Promis
               return (
                 <tr key={c.id}>
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
-                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link><div className="muted show-m">{c.owner_id ? `AE: ${c.profiles?.full_name?.split(" ")[0] ?? ""}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
+                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link><div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
                   <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>
                   <td className="num hide-m">{ly ? eur(c.revenue_by_year?.[ly] ?? 0) : "—"}</td>
                   <td className="num"><strong>{eur(c.lifetime_revenue)}</strong></td>
                   <td className="hide-m muted">{(c.stations ?? []).join(", ")}</td>
-                  <td className="hide-m">{c.profiles?.full_name?.split(" ")[0] ?? <span className="muted">—{c.served_by ? ` · πριν: ${c.served_by}` : ""}</span>}</td>
+                  <td className="hide-m">{aeLabel(c, true) ?? <span className="muted">—{c.served_by ? ` · πριν: ${c.served_by}` : ""}</span>}</td>
                   <td className="hide-m">{c.agency_id ? <Link href={`/agencies/${c.agency_id}`}>{c.agency}</Link> : <span className="muted">{CHANNEL[c.channel] === "Media Shop" ? c.agency ?? "" : ""}</span>}</td>
                   <td>
                     {c.status === "base" && !c.owner_id && (

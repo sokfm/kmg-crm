@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
-import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr, customerState } from "@/lib/format";
+import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr, customerState, aeLabel } from "@/lib/format";
 import { addActivity, decideWeb, renameCustomer, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
@@ -35,6 +35,20 @@ export default async function CustomerPage({
       .limit(sp.all ? 2000 : 24),
   ]);
 
+  // Οι αυθεντικές εγγραφές του Excel (όνομα / Account Executive / Agent), ομαδοποιημένες
+  const { data: rawLines } = await supabase.from("history_lines")
+    .select("customer_name_raw, account_executive_raw, agent_raw, period, amount")
+    .eq("customer_id", c.id).eq("source_scope", "monthly_billing").limit(3000);
+  const rawMap = new Map<string, { key: string; name: string; acc: string | null; agent: string | null; first: string; last: string; n: number; sum: number }>();
+  for (const h of rawLines ?? []) {
+    const key = `${h.customer_name_raw}|${h.account_executive_raw ?? ""}|${h.agent_raw ?? ""}`;
+    const e = rawMap.get(key) ?? { key, name: h.customer_name_raw ?? "—", acc: h.account_executive_raw, agent: h.agent_raw, first: h.period, last: h.period, n: 0, sum: 0 };
+    e.n++; e.sum += Number(h.amount ?? 0);
+    if (h.period < e.first) e.first = h.period;
+    if (h.period > e.last) e.last = h.period;
+    rawMap.set(key, e);
+  }
+  const raw = [...rawMap.values()].sort((a, b) => b.last.localeCompare(a.last));
   const byYear = Object.entries((c.revenue_by_year ?? {}) as Record<string, number>).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...byYear.map(([, v]) => v));
   const lastActivity = acts?.find((a) => a.type !== "note");
@@ -57,7 +71,7 @@ export default async function CustomerPage({
           )}
         </div>
         <div className="muted">
-          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {customerState(c).label} · Account Executive: {c.profiles?.full_name ?? "κανείς (βάση)"}{c.served_by && c.served_by !== c.profiles?.full_name ? ` · τον εξυπηρετούσε: ${c.served_by}${c.served_by_period ? ` (ως ${periodGr(c.served_by_period)})` : ""}` : ""}
+          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {customerState(c).label} · Account Executive: {aeLabel(c) ?? "κανείς (βάση)"}{c.served_by && c.served_by !== aeLabel(c) ? ` · τον εξυπηρετούσε: ${c.served_by}${c.served_by_period ? ` (ως ${periodGr(c.served_by_period)})` : ""}` : ""}
         </div>
       </div>
       <Flash sp={sp} />
@@ -109,6 +123,27 @@ export default async function CustomerPage({
           </div>
         )}
       </div>
+      )}
+
+      {raw.length > 0 && (
+        <div className="card">
+          <h2>Όπως είναι γραμμένος στην τιμολόγηση</h2>
+          <p className="muted" style={{ marginTop: -4 }}>Οι εγγραφές του Excel που έχουν ενωθεί σε αυτόν τον πελάτη. Αν κάτι δεν ταιριάζει, διόρθωσε το όνομα (✏️) ή χώρισέ το από το Merge.</p>
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead><tr><th>Όνομα στο Excel</th><th>Account Executive</th><th>Agent</th><th>Περίοδος</th><th className="num">Γραμμές</th><th className="num">Ποσό</th></tr></thead>
+              <tbody>
+                {raw.map((r) => (
+                  <tr key={r.key}>
+                    <td><strong>{r.name}</strong></td><td>{r.acc ?? "—"}</td><td>{r.agent ?? "—"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{periodGr(r.first)}{r.first !== r.last ? ` – ${periodGr(r.last)}` : ""}</td>
+                    <td className="num">{r.n}</td><td className="num">{eur(r.sum)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {byYear.length > 0 && (
