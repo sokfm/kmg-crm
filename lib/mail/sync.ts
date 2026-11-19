@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { graph, refreshAccess, type GraphMessage } from "./microsoft";
-import { judgeEmail } from "./ai";
+import { judgeEmail, type EmailVerdict } from "./ai";
 
 // Συγχρονισμός ενός γραμματοκιβωτίου: διαβάζει τα νέα Εισερχόμενα και Απεσταλμένα,
 // γράφει τα email γνωστών πελατών/leads στην καρτέλα τους, φτιάχνει leads όταν η AI
@@ -37,7 +37,7 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
       const since = isIn ? acc.inbox_since : acc.sent_since;
       const path =
         `/me/mailFolders/${folder}/messages?$top=${PER_FOLDER}` +
-        `&$select=id,subject,from,toRecipients,ccRecipients,${field},body,webLink,isDraft` +
+        `&$select=id,subject,from,toRecipients,ccRecipients,${field},body,bodyPreview,webLink,isDraft` +
         `&$filter=${field} gt ${new Date(since).toISOString()}&$orderby=${field} asc`;
       const { value } = await graph<{ value: GraphMessage[] }>(tok.access_token, path);
       let newest = since;
@@ -64,15 +64,31 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
         if (seen) continue;
 
         const match = await findMatch(db, other.email);
-        const verdict = await judgeEmail({
-          direction: isIn ? "in" : "out",
-          from: isIn ? `${other.name ?? ""} <${other.email}>` : acc.ms_email,
-          to: isIn ? acc.ms_email : `${other.name ?? ""} <${other.email}>`,
-          subject: m.subject ?? "",
-          date: when,
-          text: m.body?.content ?? m.bodyPreview ?? "",
-          knownAs: match?.label,
-        });
+        let verdict: EmailVerdict;
+        try {
+          verdict = await judgeEmail({
+            direction: isIn ? "in" : "out",
+            from: isIn ? `${other.name ?? ""} <${other.email}>` : acc.ms_email,
+            to: isIn ? acc.ms_email : `${other.name ?? ""} <${other.email}>`,
+            subject: m.subject ?? "",
+            date: when,
+            text: m.body?.content ?? m.bodyPreview ?? "",
+            knownAs: match?.label,
+          });
+        } catch (e) {
+          // Αν η AI δεν απαντήσει, δεν χάνουμε το email: γνωστός πελάτης → καταγραφή,
+          // άγνωστο εισερχόμενο → «Προς έλεγχο» για να αποφασίσεις εσύ.
+          verdict = {
+            kind: match ? "existing_customer" : isIn ? "new_lead" : "other",
+            confidence: 0,
+            company: null,
+            contact_name: other.name,
+            phone: null,
+            summary: (m.bodyPreview ?? "").slice(0, 200),
+            reason: `Η AI δεν απάντησε (${e instanceof Error ? e.message.slice(0, 80) : "σφάλμα"}) — έλεγξέ το εσύ.`,
+            tasks: [],
+          };
+        }
 
         const base = {
           user_id: acc.user_id,

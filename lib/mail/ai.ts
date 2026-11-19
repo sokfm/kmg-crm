@@ -17,10 +17,9 @@ const SYSTEM = `Είσαι ο βοηθός πωλήσεων της Kartelias Med
 διαφήμιση (σποτ, χορηγίες εκπομπών, πακέτα), digital και social. Πελάτες είναι τοπικές επιχειρήσεις
 και διαφημιστικά πρακτορεία (U Media, Mave, GM, Red Lemon, MMS, Wavemaker, Initiative, Carat, Bold).
 
-Διαβάζεις ένα email από το γραμματοκιβώτιο ενός στελέχους της KMG και απαντάς ΜΟΝΟ με JSON:
-{"kind": "...", "confidence": 0-1, "company": "εμπορική ονομασία ή null", "contact_name": "... ή null",
- "phone": "... ή null", "summary": "μία πρόταση στα ελληνικά", "reason": "γιατί, σε μία πρόταση",
- "tasks": [{"title": "τι πρέπει να κάνει το στέλεχος της KMG", "due_date": "YYYY-MM-DD ή null"}]}
+Διαβάζεις ένα email από το γραμματοκιβώτιο ενός στελέχους της KMG και απαντάς ΠΑΝΤΑ με το εργαλείο verdict.
+summary: μία σύντομη πρόταση στα ελληνικά. reason: γιατί, σε μία πρόταση. company: εμπορική ονομασία.
+tasks: τι πρέπει να κάνει το στέλεχος της KMG, με due_date σε μορφή YYYY-MM-DD ή null.
 
 kind:
 - new_lead: επιχείρηση που ενδιαφέρεται να διαφημιστεί / ζητά τιμές / προσφορά / χορηγία και δεν φαίνεται ήδη πελάτης.
@@ -61,22 +60,51 @@ export async function judgeEmail(input: {
     input.text.slice(0, 3000),
   ].join("\n");
 
+  // Ζητάμε την απάντηση μέσω «εργαλείου» με αυστηρό σχήμα: η AI δεν μπορεί να γυρίσει
+  // μισό ή χαλασμένο JSON.
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || "claude-haiku-5-5",
-      max_tokens: 600,
+      max_tokens: 1500,
       system: SYSTEM,
+      tools: [VERDICT_TOOL],
+      tool_choice: { type: "tool", name: "verdict" },
       messages: [{ role: "user", content: user }],
     }),
   });
-  if (!res.ok) throw new Error(`AI ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data = (await res.json()) as { content: { type: string; text?: string }[] };
-  const text = data.content.find((c) => c.type === "text")?.text ?? "{}";
-  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
-  const v = JSON.parse(json) as EmailVerdict;
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`AI ${res.status}: ${raw.slice(0, 200)}`);
+  const data = JSON.parse(raw) as { content: { type: string; input?: unknown }[] };
+  const block = data.content.find((c) => c.type === "tool_use");
+  if (!block?.input) throw new Error("AI: κενή απάντηση");
+  const v = block.input as EmailVerdict;
   v.tasks = Array.isArray(v.tasks) ? v.tasks.filter((t) => t && t.title).slice(0, 3) : [];
   v.confidence = Number(v.confidence) || 0;
+  v.summary = v.summary ?? "";
+  v.reason = v.reason ?? "";
   return v;
 }
+
+const VERDICT_TOOL = {
+  name: "verdict",
+  description: "Η ταξινόμηση του email για το CRM της KMG.",
+  input_schema: {
+    type: "object",
+    properties: {
+      kind: { type: "string", enum: ["new_lead", "existing_customer", "agency", "supplier", "personal", "newsletter", "other"] },
+      confidence: { type: "number" },
+      company: { type: ["string", "null"] },
+      contact_name: { type: ["string", "null"] },
+      phone: { type: ["string", "null"] },
+      summary: { type: "string" },
+      reason: { type: "string" },
+      tasks: {
+        type: "array",
+        items: { type: "object", properties: { title: { type: "string" }, due_date: { type: ["string", "null"] } }, required: ["title"] },
+      },
+    },
+    required: ["kind", "confidence", "summary", "reason", "tasks"],
+  },
+};

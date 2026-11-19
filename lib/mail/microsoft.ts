@@ -31,7 +31,9 @@ async function token(body: Record<string, string>): Promise<TokenResponse> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: env("MS_CLIENT_ID"), client_secret: env("MS_CLIENT_SECRET"), scope: SCOPES, ...body }),
   });
-  const json = (await res.json()) as TokenResponse;
+  const raw = await res.text();
+  let json: TokenResponse;
+  try { json = JSON.parse(raw) as TokenResponse; } catch { throw new Error(`Microsoft token ${res.status}: ${raw.slice(0, 150) || "κενή απάντηση"}`); }
   if (!res.ok || json.error) throw new Error(`Microsoft: ${json.error_description ?? json.error ?? res.status}`);
   return json;
 }
@@ -45,8 +47,9 @@ export async function graph<T>(accessToken: string, path: string): Promise<T> {
   const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
     headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.body-content-type="text"' },
   });
-  if (!res.ok) throw new Error(`Graph ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return (await res.json()) as T;
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`Graph ${res.status}: ${raw.slice(0, 200)}`);
+  try { return JSON.parse(raw) as T; } catch { throw new Error(`Graph: μη έγκυρη απάντηση (${raw.length} χαρακτήρες)`); }
 }
 
 export type GraphAddress = { emailAddress: { name?: string; address?: string } };
