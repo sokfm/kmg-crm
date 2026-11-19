@@ -280,4 +280,20 @@ do $$ begin
   assert (select customer_id from tasks where title='Κλήση Παπά') = '60000000-0000-0000-0000-000000000001', 'χάθηκε η εργασία';
 end $$;
 
+-- 17. Παλιοί πελάτες (12+ μήνες χωρίς καμπάνια) επιστρέφουν στη βάση· όσοι έχουν ανοιχτό lead μένουν
+reset role;
+insert into customers (id, display_name, owner_id, status, last_period, served_by) values
+ ('70000000-0000-0000-0000-000000000001','ΠΑΛΙΟΣ ΠΕΛΑΤΗΣ','00000000-0000-0000-0000-000000000003','active','2020-03','Κώστας Σταμουλάκης'),
+ ('70000000-0000-0000-0000-000000000002','ΠΑΛΙΟΣ ΜΕ LEAD','00000000-0000-0000-0000-000000000003','active','2020-03',null),
+ ('70000000-0000-0000-0000-000000000003','ΠΡΟΣΦΑΤΟΣ','00000000-0000-0000-0000-000000000003','active',to_char(now() - interval '2 months','YYYY-MM'),null);
+insert into leads (company_name, owner_id, customer_id, next_step, next_step_due) values
+ ('ΠΑΛΙΟΣ ΜΕ LEAD','00000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000002','Κλήση', current_date);
+select release_stale_owners();
+do $$ begin
+  assert (select owner_id from customers where id='70000000-0000-0000-0000-000000000001') is null, 'ο παλιός πελάτης δεν επέστρεψε στη βάση';
+  assert (select served_by from customers where id='70000000-0000-0000-0000-000000000001') = 'Κώστας Σταμουλάκης', 'χάθηκε ποιος τον εξυπηρετούσε';
+  assert (select owner_id from customers where id='70000000-0000-0000-0000-000000000002') is not null, 'πελάτης με ανοιχτό lead έφυγε από τον AE';
+  assert (select owner_id from customers where id='70000000-0000-0000-0000-000000000003') is not null, 'πρόσφατος πελάτης έφυγε από τον AE';
+end $$;
+
 select 'ALL TESTS PASSED' as result;

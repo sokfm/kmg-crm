@@ -57,7 +57,7 @@ export default async function CustomerPage({
           )}
         </div>
         <div className="muted">
-          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {customerState(c).label}{c.status === "base" && !c.closed_at ? " · στη βάση" : ""} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
+          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {customerState(c).label} · Account Executive: {c.profiles?.full_name ?? "κανείς (βάση)"}{c.served_by && c.served_by !== c.profiles?.full_name ? ` · τον εξυπηρετούσε: ${c.served_by}${c.served_by_period ? ` (ως ${periodGr(c.served_by_period)})` : ""}` : ""}
         </div>
       </div>
       <Flash sp={sp} />

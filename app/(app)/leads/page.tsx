@@ -22,7 +22,7 @@ const SORTS: Record<string, [string, boolean]> = {
   created: ["created_at", false],
 };
 const SOURCES: Record<string, string> = {
-  phone: "Τηλέφωνο", site: "Site", facebook: "Facebook", seller: "Πωλητής", base: "Βάση", competition_watch: "Competition Watch", email: "Email",
+  phone: "Τηλέφωνο", site: "Site", facebook: "Facebook", seller: "Account Executive", base: "Βάση", competition_watch: "Competition Watch", email: "Email",
 };
 
 type Row = {
@@ -98,7 +98,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<Re
               <th className="hide-m">Επόμενο βήμα</th>
               <Th k="due">Πότε</Th>
               <Th k="value" cls="num hide-m">Αξία</Th>
-              <th>Πωλητής</th>
+              <th>Account Executive</th>
               <th className="hide-m">Πηγή</th>
               <Th k="created" cls="hide-m">Δημιουργία</Th>
             </tr>

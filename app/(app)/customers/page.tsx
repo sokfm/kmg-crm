@@ -13,7 +13,7 @@ const SORTS: Record<string, [string, boolean]> = {
 };
 
 type Row = {
-  id: string; display_name: string; category: string | null; status: string; closed_at: string | null; channel: string; agency: string | null; agency_id: string | null;
+  id: string; display_name: string; category: string | null; status: string; closed_at: string | null; served_by: string | null; channel: string; agency: string | null; agency_id: string | null;
   last_period: string | null; lifetime_revenue: number; revenue_by_year: Record<string, number> | null; stations: string[] | null;
   owner_id: string | null; profiles: { full_name: string } | null;
 };
@@ -29,7 +29,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
 
   let q = supabase
     .from("customers")
-    .select("id, display_name, category, status, closed_at, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
+    .select("id, display_name, category, status, closed_at, served_by, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
     .order(SORTS[sort][0], { ascending: SORTS[sort][1], nullsFirst: false })
     .order("lifetime_revenue", { ascending: false })
     .range(page * PAGE, page * PAGE + PAGE - 1);
@@ -39,7 +39,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   if (status === "recent") q = q.gte("last_period", monthsAgo(12)).lt("last_period", monthsAgo(0));
   if (status === "inactive") q = q.gte("last_period", monthsAgo(36)).lt("last_period", monthsAgo(12));
   if (status === "dormant") q = q.or(`last_period.lt.${monthsAgo(36)},last_period.is.null`);
-  if (status === "base") q = q.eq("status", "base");
+  if (status === "base") q = q.is("owner_id", null);
   if (status === "mine") q = q.eq("owner_id", profile.id);
   if (year === "never") q = q.is("last_period", null);
   else if (/^\d{4}$/.test(year)) q = q.gte("last_period", `${year}-01`).lte("last_period", `${year}-12`);
@@ -92,7 +92,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           {chip("recent", "Recent · 12 μήνες")}
           {chip("inactive", "Inactive · 1–3 χρόνια")}
           {chip("dormant", "Dormant · 3+ χρόνια")}
-          {chip("base", "Βάση (χωρίς υπεύθυνο)")}
+          {chip("base", "Βάση (χωρίς AE)")}
           {chip("mine", "Οι δικοί μου")}
           {isAdmin && chip("closed", "Κλειστές επιχειρήσεις")}
         </div>
@@ -114,8 +114,8 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           </select>
           {isAdmin && (
             <select name="owner" defaultValue={sp.owner ?? ""}>
-              <option value="">Όλοι οι πωλητές</option>
-              <option value="none">Χωρίς υπεύθυνο</option>
+              <option value="">Όλοι οι Account Executives</option>
+              <option value="none">Χωρίς Account Executive</option>
               {(people ?? []).map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
             </select>
           )}
@@ -123,7 +123,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
         </form>
         {status === "base" && (
           <p className="muted" style={{ margin: 0 }}>
-            Πελάτες χωρίς υπεύθυνο. Ζήτα όποιον θέλεις: μόλις ο Νίκος εγκρίνει, έχεις 10 μέρες για πραγματική επαφή, αλλιώς γυρίζει πίσω.
+            Πελάτες χωρίς Account Executive (και όσοι δεν έχουν παίξει 12+ μήνες). Ζήτα όποιον θέλεις: μόλις ο Νίκος εγκρίνει, έχεις 10 μέρες για πραγματική επαφή, αλλιώς γυρίζει πίσω.
           </p>
         )}
       </div>
@@ -157,7 +157,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
               <th className="num hide-m">Τζίρος τελ. χρονιάς</th>
               <Th k="total" cls="num">Συνολικός τζίρος</Th>
               <th className="hide-m">Σταθμοί</th>
-              <th className="hide-m">Πωλητής</th>
+              <th className="hide-m">Account Executive</th>
               <th className="hide-m">Media shop</th>
               <th></th>
             </tr>
@@ -169,14 +169,14 @@ export default async function Customers({ searchParams }: { searchParams: Promis
               return (
                 <tr key={c.id}>
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
-                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link><div className="muted show-m">{c.owner_id ? `Πωλητής: ${c.profiles?.full_name?.split(" ")[0] ?? ""}` : "Βάση · χωρίς πωλητή"}</div></td>
+                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link><div className="muted show-m">{c.owner_id ? `AE: ${c.profiles?.full_name?.split(" ")[0] ?? ""}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
                   <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>
                   <td className="num hide-m">{ly ? eur(c.revenue_by_year?.[ly] ?? 0) : "—"}</td>
                   <td className="num"><strong>{eur(c.lifetime_revenue)}</strong></td>
                   <td className="hide-m muted">{(c.stations ?? []).join(", ")}</td>
-                  <td className="hide-m">{c.profiles?.full_name?.split(" ")[0] ?? <span className="muted">—</span>}</td>
+                  <td className="hide-m">{c.profiles?.full_name?.split(" ")[0] ?? <span className="muted">—{c.served_by ? ` · πριν: ${c.served_by}` : ""}</span>}</td>
                   <td className="hide-m">{c.agency_id ? <Link href={`/agencies/${c.agency_id}`}>{c.agency}</Link> : <span className="muted">{CHANNEL[c.channel] === "Media Shop" ? c.agency ?? "" : ""}</span>}</td>
                   <td>
                     {c.status === "base" && !c.owner_id && (

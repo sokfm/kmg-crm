@@ -27,7 +27,7 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
             <>
               <div>
                 <strong>Υπάρχει ήδη πελάτης «{sp.dup_name}»</strong>{" "}
-                <span className="muted">({sp.dup_owner === "Βάση πελατών" ? "στη βάση, χωρίς υπεύθυνο" : `υπεύθυνος: ${sp.dup_owner}`})</span>
+                <span className="muted">({sp.dup_owner === "Βάση πελατών" ? "στη βάση, χωρίς Account Executive" : `Account Executive: ${sp.dup_owner}`})</span>
               </div>
               <div className="muted">Είναι ο ίδιος; Τότε το lead μπαίνει στην καρτέλα του, με όλο το ιστορικό του.{sp.dup_owner === "Βάση πελατών" ? (isAdmin ? " Ο πελάτης βγαίνει από τη βάση και περνά σε όποιον αναθέσεις το lead (ή σε σένα)." : " Θα σταλεί και αίτημα στον Νίκο να σου δοθεί ο πελάτης.") : ""}</div>
               <div className="row">

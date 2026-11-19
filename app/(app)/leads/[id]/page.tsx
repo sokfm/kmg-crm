@@ -9,7 +9,7 @@ import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/T
 import { StagePath } from "@/components/MoveDialog";
 
 const SOURCES: Record<string, string> = {
-  phone: "Τηλέφωνο", site: "Site", facebook: "Facebook", seller: "Πωλητής", base: "Βάση πελατών",
+  phone: "Τηλέφωνο", site: "Site", facebook: "Facebook", seller: "Account Executive", base: "Βάση πελατών",
   competition_watch: "Competition Watch", email: "Email",
 };
 const ICON: Record<string, string> = { call: "📞", meeting: "🤝", viber: "💬", email: "✉️", note: "📝" };
@@ -89,7 +89,7 @@ export default async function LeadPage({
           <div><span>Υπεύθυνος επικοινωνίας</span><strong>{lead.contact_name ?? "—"}</strong></div>
           <div><span>Τηλέφωνο</span><strong>{lead.phone ? <a href={`tel:${lead.phone}`}>{lead.phone}</a> : "—"}</strong></div>
           <div><span>Εκτιμώμενη αξία</span><strong>{lead.expected_value ? eur(Number(lead.expected_value)) : "—"}</strong></div>
-          <div><span>Πωλητής</span><strong>{lead.owner?.full_name ?? "Χωρίς ανάθεση"}</strong></div>
+          <div><span>Account Executive</span><strong>{lead.owner?.full_name ?? "Χωρίς ανάθεση"}</strong></div>
           <div><span>Τελευταία επαφή</span><strong>{lastContact ? dateGr(lastContact.occurred_at) : "καμία"}</strong></div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default async function LeadPage({
                 <label>Email<input name="email" defaultValue={lead.email ?? ""} /></label>
                 <label>Εκτιμώμενη αξία (€)<input name="expected_value" inputMode="decimal" defaultValue={lead.expected_value ?? ""} placeholder="π.χ. 1.500" /></label>
                 {isAdmin && (
-                  <label>Πωλητής
+                  <label>Account Executive
                     <select name="owner_id" defaultValue={lead.owner_id ?? ""}>
                       <option value="">Χωρίς ανάθεση</option>
                       {people.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}

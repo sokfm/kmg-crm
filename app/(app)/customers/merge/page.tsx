@@ -46,7 +46,7 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
                   <strong>{c.display_name}</strong>
                   <div className="muted">
                     {customerState(c).label} · {periodGr(c.first_period)} – {periodGr(c.last_period)} · {(c.stations ?? []).join(", ")}
-                    {c.agency ? ` · ${c.agency}` : ""} · {c.profiles?.full_name ?? "χωρίς υπεύθυνο"}
+                    {c.agency ? ` · ${c.agency}` : ""} · {c.profiles?.full_name ?? "χωρίς Account Executive"}
                   </div>
                 </span>
                 <span className="badge gray">{eur(c.lifetime_revenue)}</span>

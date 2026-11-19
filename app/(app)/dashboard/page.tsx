@@ -160,7 +160,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       <div className="grid2">
         <Table title={`Ανά σταθμό · ${ytdLabel}`} data={breakdown((r) => r.station)} />
-        <Table title={`Ανά πωλητή · ${ytdLabel}`} data={breakdown((r) => names.get(r.owner_id ?? ceoId ?? "") ?? "—")} />
+        <Table title={`Ανά Account Executive · ${ytdLabel}`} data={breakdown((r) => r.ae ?? names.get(r.owner_id ?? ceoId ?? "") ?? "—")} />
         <Table title={`Ανά δρόμο πώλησης · ${ytdLabel}`} data={breakdown((r) => CHANNEL[r.channel] ?? r.channel)} />
         <Table
           title={`Media shops · ${ytdLabel}`}
