@@ -5,6 +5,9 @@ import { Flash } from "@/components/Flash";
 
 const STATIONS = ["ΣΟΚ FM", "DALKAS", "ΜΠΛΕ", "NRG", "lalala.gr", "Social"];
 
+// Χρόνος για το ψάξιμο της AI στο ίντερνετ
+export const maxDuration = 120;
+
 export default async function NewLead({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const { supabase, isAdmin } = await requireProfile();

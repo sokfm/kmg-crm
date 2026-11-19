@@ -25,6 +25,9 @@ function guessWord(e: Em) {
   return ["gmail", "yahoo", "hotmail", "outlook", "otenet", "live"].includes(dom) ? "" : dom;
 }
 
+// Χρόνος για το ψάξιμο της AI στο ίντερνετ
+export const maxDuration = 120;
+
 export default async function Inbox({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const { supabase, isAdmin } = await requireProfile();

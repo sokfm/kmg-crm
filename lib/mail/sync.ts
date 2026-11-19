@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { graph, refreshAccess, type GraphMessage } from "./microsoft";
 import { judgeEmail, type EmailVerdict } from "./ai";
+import { enrichLead } from "../enrich";
 
 // Συγχρονισμός ενός γραμματοκιβωτίου: διαβάζει τα νέα Εισερχόμενα και Απεσταλμένα,
 // γράφει τα email γνωστών πελατών/leads στην καρτέλα τους, φτιάχνει leads όταν η AI
@@ -163,6 +164,7 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
               [...notify].map((uid) => ({ user_id: uid, kind: "lead_from_email", title: `Νέο lead από email: ${company}`, link: `/leads/${lead.id}` })),
             );
             result.leads++;
+            try { await enrichLead(db, lead.id); } catch { /* δεν σταματάμε τον συγχρονισμό */ }
             continue;
           }
         }

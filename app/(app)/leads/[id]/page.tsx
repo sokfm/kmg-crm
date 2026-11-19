@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, LOST_KINDS, STAGES, dateGr, eur, today } from "@/lib/format";
-import { addActivity, updateLead } from "../../actions";
+import { addActivity, updateLead, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 import { StagePath } from "@/components/MoveDialog";
@@ -14,6 +14,9 @@ const SOURCES: Record<string, string> = {
 };
 const ICON: Record<string, string> = { call: "📞", meeting: "🤝", viber: "💬", email: "✉️", note: "📝" };
 const dateTime = (d: string) => new Intl.DateTimeFormat("el-GR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(d));
+
+// Χρόνος για το ψάξιμο της AI στο ίντερνετ
+export const maxDuration = 120;
 
 export default async function LeadPage({
   params, searchParams,
@@ -43,6 +46,7 @@ export default async function LeadPage({
   const t = today();
   const in3 = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   const closed = lead.status === "won" || lead.status === "lost";
+  const justCreated = Date.now() - Date.parse(lead.created_at) < 3 * 60 * 1000;
   const late = !closed && lead.next_step_due && lead.next_step_due < t;
   const card = { id: lead.id, version: lead.version, company_name: lead.company_name, next_step: lead.next_step, next_step_due: lead.next_step_due, expected_value: lead.expected_value };
 
@@ -71,6 +75,7 @@ export default async function LeadPage({
         </div>
         <div className="sf-highlights">
           <div><span>Στάδιο</span><strong>{STAGES[lead.status]}</strong></div>
+          <div><span>Κατηγορία</span><strong>{lead.category ?? "—"}</strong></div>
           <div><span>Υπεύθυνος επικοινωνίας</span><strong>{lead.contact_name ?? "—"}</strong></div>
           <div><span>Τηλέφωνο</span><strong>{lead.phone ? <a href={`tel:${lead.phone}`}>{lead.phone}</a> : "—"}</strong></div>
           <div><span>Εκτιμώμενη αξία</span><strong>{lead.expected_value ? eur(Number(lead.expected_value)) : "—"}</strong></div>
@@ -213,6 +218,32 @@ export default async function LeadPage({
             <div><span>Περιοχή</span>{lead.area ?? "—"}</div>
             <div><span>Email</span>{lead.email ? <a href={`mailto:${lead.email}`}>{lead.email}</a> : "—"}</div>
             {lead.notes && <div><span>Σημειώσεις</span><span style={{ whiteSpace: "pre-wrap" }}>{lead.notes}</span></div>}
+          </div>
+          <div className="card sf-fields">
+            <div className="row"><h2 className="grow" style={{ margin: 0 }}>Από το ίντερνετ</h2>
+              {lead.web_status === "found" && <span className="badge good">βρέθηκε</span>}
+              {lead.web_status === "closed" && <span className="badge late">φαίνεται κλειστή</span>}
+              {lead.web_status === "not_found" && <span className="badge gray">δεν βρέθηκε</span>}
+            </div>
+            {!lead.web_checked_at ? (
+              <p className="muted" style={{ margin: 0 }}>{justCreated ? "Η AI ψάχνει τώρα την επιχείρηση… ανανέωσε τη σελίδα σε λίγα δευτερόλεπτα." : "Δεν έχει γίνει αναζήτηση ακόμα."}</p>
+            ) : (
+              <>
+                {lead.category && <div><span>Κατηγορία</span>{lead.category}</div>}
+                {lead.website && <div><span>Site</span><a href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer">{lead.website.replace(/^https?:\/\//, "")}</a></div>}
+                {lead.address && <div><span>Διεύθυνση</span>{lead.address}</div>}
+                {lead.web_note && <div><span>Σημείωση AI</span>{lead.web_note}</div>}
+                {(lead.web_sources ?? []).length > 0 && <div><span>Πηγές</span>{(lead.web_sources as string[]).slice(0, 3).map((u) => <a key={u} href={u} target="_blank" rel="noreferrer" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.replace(/^https?:\/\/(www\.)?/, "")}</a>)}</div>}
+                <p className="muted" style={{ margin: 0 }}>Η AI συμπληρώνει μόνο κενά πεδία· ό,τι έγραψες εσύ δεν αλλάζει. Έλεγξέ τα πριν τα χρησιμοποιήσεις.</p>
+              </>
+            )}
+            {true && (
+              <form action={webLookup}>
+                <input type="hidden" name="kind" value="lead" />
+                <input type="hidden" name="id" value={lead.id} />
+                <SubmitButton className="secondary" pending="Ψάχνω…" hint="Η AI ψάχνει στο ίντερνετ, 10–30 δευτερόλεπτα">{lead.web_checked_at ? "Ξαναψάξε στο ίντερνετ" : "Ψάξε στο ίντερνετ"}</SubmitButton>
+              </form>
+            )}
           </div>
           <div className="card sf-fields">
             <h2>Ιστορικό εγγραφής</h2>

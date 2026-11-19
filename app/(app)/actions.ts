@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireProfile } from "@/lib/auth";
 
 const s = (f: FormData, k: string) => {
@@ -62,7 +63,16 @@ export async function createLead(f: FormData) {
     .single();
   if (error || !data) back("/leads/new", { error: friendly(error?.message) });
   revalidatePath("/today");
-  redirect(`/leads/${data!.id}?ok=created`);
+  // Η AI ψάχνει την επιχείρηση στο ίντερνετ μετά την καταχώριση (δεν περιμένεις εσύ)
+  const newId = data!.id;
+  after(async () => {
+    try {
+      const { supabaseAdmin } = await import("@/lib/supabase/admin");
+      const { enrichLead } = await import("@/lib/enrich");
+      await enrichLead(supabaseAdmin(), newId);
+    } catch { /* αν αποτύχει, μένει το κουμπί «Ψάξε στο ίντερνετ» */ }
+  });
+  redirect(`/leads/${newId}?ok=created`);
 }
 
 // Αποθήκευση με έλεγχο έκδοσης: αν κάποιος άλλος άλλαξε το lead στο μεταξύ,
@@ -335,7 +345,15 @@ export async function reviewAsLead(f: FormData) {
     email_message_id: em.id,
   });
   revalidatePath("/inbox");
-  redirect(`/leads/${lead!.id}?ok=created`);
+  const newId = lead!.id;
+  after(async () => {
+    try {
+      const { supabaseAdmin } = await import("@/lib/supabase/admin");
+      const { enrichLead } = await import("@/lib/enrich");
+      await enrichLead(supabaseAdmin(), newId);
+    } catch { /* μένει το κουμπί «Ψάξε στο ίντερνετ» */ }
+  });
+  redirect(`/leads/${newId}?ok=created`);
 }
 
 export async function reviewAsCustomer(f: FormData) {
@@ -436,4 +454,60 @@ export async function disconnectOutlook() {
   const { supabaseAdmin } = await import("@/lib/supabase/admin");
   await supabaseAdmin().from("mail_accounts").delete().eq("user_id", profile.id);
   back("/settings", { ok: "disconnected" });
+}
+
+// ---------- Στοιχεία από το ίντερνετ ----------
+
+export async function webLookup(f: FormData) {
+  const { supabase, isAdmin } = await requireProfile();
+  const kind = s(f, "kind");
+  const id = s(f, "id")!;
+  const path = kind === "lead" ? `/leads/${id}` : `/customers/${id}`;
+  // Ελέγχουμε ότι ο χρήστης βλέπει την εγγραφή (δικαιώματα βάσης)
+  const { data: seen } = await supabase.from(kind === "lead" ? "leads" : "customers").select("id").eq("id", id).maybeSingle();
+  if (!seen) back(path, { error: "Δεν βρέθηκε" });
+  if (kind !== "lead" && !isAdmin) back(path, { error: "Μόνο ο Νίκος ή η Γιάννα" });
+  const { supabaseAdmin } = await import("@/lib/supabase/admin");
+  const { enrichLead, enrichCustomer } = await import("@/lib/enrich");
+  const db = supabaseAdmin();
+  try {
+    if (kind === "lead") await enrichLead(db, id);
+    else {
+      const { data: c } = await db.from("customers").select("id, display_name, phone, email, category, agency, stations, last_period").eq("id", id).single();
+      await enrichCustomer(db, c!);
+    }
+  } catch (e) {
+    back(path, { error: friendly(e instanceof Error ? e.message : String(e)) });
+  }
+  revalidatePath(path);
+  back(path, { ok: "web" });
+}
+
+export async function runWebBatch(f: FormData) {
+  const { isAdmin } = await requireProfile();
+  if (!isAdmin) back("/web-check", { error: "Μόνο ο Νίκος ή η Γιάννα" });
+  const n = Math.min(60, Math.max(1, Number(s(f, "n")) || 10));
+  const { supabaseAdmin } = await import("@/lib/supabase/admin");
+  const { enrichBatch } = await import("@/lib/enrich");
+  const r = await enrichBatch(supabaseAdmin(), n);
+  revalidatePath("/web-check");
+  if (r.stopped) back("/web-check", { error: `Σταμάτησε: ${r.stopped}` });
+  back("/web-check", { ok: "webbatch", n: `${r.done}-${r.found}-${r.review}-${r.errors}` });
+}
+
+export async function setWebAuto(f: FormData) {
+  const { supabase, profile } = await requireProfile();
+  const on = s(f, "on") === "1";
+  const { error } = await supabase.from("app_settings").upsert({ key: "web_auto", value: { on, error: null }, updated_by: profile.id, updated_at: new Date().toISOString() });
+  revalidatePath("/web-check");
+  if (error) back("/web-check", { error: friendly(error.message) });
+  back("/web-check", { ok: on ? "webauto_on" : "webauto_off" });
+}
+
+export async function decideWeb(f: FormData) {
+  const { supabase } = await requireProfile();
+  const { error } = await supabase.rpc("decide_web_review", { p_id: s(f, "id"), p_closed: s(f, "closed") === "1" });
+  revalidatePath("/web-check");
+  if (error) back("/web-check", { error: friendly(error.message) });
+  back("/web-check", { ok: s(f, "closed") === "1" ? "webclosed" : "webkept" });
 }

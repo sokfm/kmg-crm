@@ -3,9 +3,12 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr } from "@/lib/format";
-import { addActivity, renameCustomer } from "../../actions";
+import { addActivity, renameCustomer, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
+
+// Χρόνος για το ψάξιμο της AI στο ίντερνετ
+export const maxDuration = 120;
 
 export default async function CustomerPage({
   params, searchParams,
@@ -45,7 +48,7 @@ export default async function CustomerPage({
         <Link href="/customers" className="muted">← Πελάτες</Link>
         <h1>{c.display_name}</h1>
         <div className="muted">
-          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {c.status === "base" ? "Στη βάση" : "Ενεργός"} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
+          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {c.closed_at ? "Κλειστή επιχείρηση" : c.status === "base" ? "Στη βάση" : "Ενεργός"} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
         </div>
       </div>
       <Flash sp={sp} />
@@ -67,6 +70,33 @@ export default async function CustomerPage({
         <div className="card"><div className="muted">Τελευταία καμπάνια</div><div className="kpi">{periodGr(c.last_period)}</div></div>
         <div className="card"><div className="muted">Σταθμοί</div><div className="kpi" style={{ fontSize: 16 }}>{(c.stations ?? []).join(", ") || "—"}</div></div>
         <div className="card"><div className="muted">Τελευταία επαφή</div><div className="kpi">{lastActivity ? dateGr(lastActivity.occurred_at) : "—"}</div></div>
+      </div>
+
+          <div className="card sf-fields" style={{ maxWidth: 720 }}>
+        <div className="row"><h2 className="grow" style={{ margin: 0 }}>Από το ίντερνετ</h2>
+          {c.web_status === "found" && <span className="badge good">βρέθηκε</span>}
+          {c.web_status === "closed" && <span className="badge late">φαίνεται κλειστή</span>}
+          {c.web_status === "not_found" && <span className="badge gray">δεν βρέθηκε</span>}
+        </div>
+        {!c.web_checked_at ? (
+          <p className="muted" style={{ margin: 0 }}>{false ? "Η AI ψάχνει τώρα την επιχείρηση… ανανέωσε τη σελίδα σε λίγα δευτερόλεπτα." : "Δεν έχει γίνει αναζήτηση ακόμα."}</p>
+        ) : (
+          <>
+            {c.category && <div><span>Κατηγορία</span>{c.category}</div>}
+            {c.website && <div><span>Site</span><a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">{c.website.replace(/^https?:\/\//, "")}</a></div>}
+            {c.address && <div><span>Διεύθυνση</span>{c.address}</div>}
+            {c.web_note && <div><span>Σημείωση AI</span>{c.web_note}</div>}
+            {(c.web_sources ?? []).length > 0 && <div><span>Πηγές</span>{(c.web_sources as string[]).slice(0, 3).map((u) => <a key={u} href={u} target="_blank" rel="noreferrer" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.replace(/^https?:\/\/(www\.)?/, "")}</a>)}</div>}
+            <p className="muted" style={{ margin: 0 }}>Η AI συμπληρώνει μόνο κενά πεδία· ό,τι έγραψες εσύ δεν αλλάζει. Έλεγξέ τα πριν τα χρησιμοποιήσεις.</p>
+          </>
+        )}
+        {isAdmin && (
+          <form action={webLookup}>
+            <input type="hidden" name="kind" value="customer" />
+            <input type="hidden" name="id" value={c.id} />
+            <SubmitButton className="secondary" pending="Ψάχνω…" hint="Η AI ψάχνει στο ίντερνετ, 10–30 δευτερόλεπτα">{c.web_checked_at ? "Ξαναψάξε στο ίντερνετ" : "Ψάξε στο ίντερνετ"}</SubmitButton>
+          </form>
+        )}
       </div>
 
       {byYear.length > 0 && (

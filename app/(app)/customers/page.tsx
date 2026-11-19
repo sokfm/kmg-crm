@@ -13,7 +13,7 @@ const SORTS: Record<string, [string, boolean]> = {
 };
 
 type Row = {
-  id: string; display_name: string; status: string; channel: string; agency: string | null; agency_id: string | null;
+  id: string; display_name: string; category: string | null; status: string; channel: string; agency: string | null; agency_id: string | null;
   last_period: string | null; lifetime_revenue: number; revenue_by_year: Record<string, number> | null; stations: string[] | null;
   owner_id: string | null; profiles: { full_name: string } | null;
 };
@@ -21,7 +21,7 @@ type Row = {
 export default async function Customers({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const { supabase, isAdmin, isCeo, profile } = await requireProfile();
-  const status = ["all", "active", "base", "mine"].includes(sp.status) ? sp.status : isAdmin ? "all" : "mine";
+  const status = ["all", "active", "base", "mine", "closed"].includes(sp.status) ? sp.status : isAdmin ? "all" : "mine";
   const year = sp.year ?? "";
   const sort = SORTS[sp.sort] ? sp.sort : "last";
   const page = Math.max(0, Number(sp.page) || 0);
@@ -29,10 +29,12 @@ export default async function Customers({ searchParams }: { searchParams: Promis
 
   let q = supabase
     .from("customers")
-    .select("id, display_name, status, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
+    .select("id, display_name, category, status, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
     .order(SORTS[sort][0], { ascending: SORTS[sort][1], nullsFirst: false })
     .order("lifetime_revenue", { ascending: false })
     .range(page * PAGE, page * PAGE + PAGE - 1);
+  if (status === "closed") q = q.not("closed_at", "is", null);
+  else q = q.is("closed_at", null);
   if (status === "active") q = q.eq("status", "active");
   if (status === "base") q = q.eq("status", "base");
   if (status === "mine") q = q.eq("owner_id", profile.id);
@@ -86,6 +88,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           {chip("active", "Ενεργοί")}
           {chip("base", "Βάση (χωρίς υπεύθυνο)")}
           {chip("mine", "Οι δικοί μου")}
+          {isAdmin && chip("closed", "Κλειστές επιχειρήσεις")}
         </div>
         <form className="row">
           <input type="hidden" name="status" value={status} />
@@ -142,6 +145,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
             <tr>
               {isAdmin && <th style={{ width: 28 }} title="Τσέκαρε 2+ για ένωση">🔗</th>}
               <Th k="name">Πελάτης</Th>
+              <th className="hide-m">Κατηγορία</th>
               <th>Κατάσταση</th>
               <Th k="last">Τελευταία καμπάνια</Th>
               <th className="num hide-m">Τζίρος τελ. χρονιάς</th>
@@ -153,13 +157,14 @@ export default async function Customers({ searchParams }: { searchParams: Promis
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={10} className="muted" style={{ padding: 16 }}>Κανένας πελάτης με αυτά τα φίλτρα.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={11} className="muted" style={{ padding: 16 }}>Κανένας πελάτης με αυτά τα φίλτρα.</td></tr>}
             {rows.map((c) => {
               const ly = c.last_period?.slice(0, 4);
               return (
                 <tr key={c.id}>
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
                   <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link></td>
+                  <td className="hide-m muted">{c.category ?? ""}</td>
                   <td><span className={`badge ${c.status === "active" ? "good" : "gray"}`}>{c.status === "active" ? "Ενεργός" : "Βάση"}</span></td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>
                   <td className="num hide-m">{ly ? eur(c.revenue_by_year?.[ly] ?? 0) : "—"}</td>
