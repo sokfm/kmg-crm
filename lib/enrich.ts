@@ -54,7 +54,7 @@ const RECORD_TOOL = {
 
 export class EnrichStop extends Error {}
 
-type Block = { type: string; name?: string; input?: unknown; [k: string]: unknown };
+type Block = { type: string; name?: string; input?: unknown; text?: string; content?: unknown; [k: string]: unknown };
 type ApiResp = { content: Block[]; stop_reason: string; usage?: { input_tokens?: number; output_tokens?: number; server_tool_use?: { web_search_requests?: number } } };
 
 async function call(body: Record<string, unknown>): Promise<ApiResp> {
@@ -78,40 +78,61 @@ async function call(body: Record<string, unknown>): Promise<ApiResp> {
 
 export async function lookupBusiness(q: { name: string; hint?: string | null; phone?: string | null; email?: string | null }): Promise<{ info: WebInfo; usage: Usage }> {
   const usage: Usage = { searches: 0, input: 0, output: 0 };
-  const tools = [
-    // Χωρίς user_location: η Anthropic δεν δέχεται ακόμα «GR». Η περιοχή μπαίνει στο κείμενο της αναζήτησης.
-    { type: "web_search_20250305", name: "web_search", max_uses: 3 },
-    RECORD_TOOL,
-  ];
+  const model = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
+  const count = (r: ApiResp) => {
+    usage.searches += r.usage?.server_tool_use?.web_search_requests ?? 0;
+    usage.input += r.usage?.input_tokens ?? 0;
+    usage.output += r.usage?.output_tokens ?? 0;
+  };
   const user = [
     `Επιχείρηση: ${q.name}`,
     q.hint ? `Πληροφορίες: ${q.hint}` : "",
     q.phone ? `Τηλέφωνο που ήδη ξέρουμε: ${q.phone}` : "",
     q.email ? `Email που ήδη ξέρουμε: ${q.email}` : "",
   ].filter(Boolean).join("\n");
-  const messages: { role: string; content: unknown }[] = [{ role: "user", content: user }];
-  const model = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
 
-  for (let turn = 0; turn < 4; turn++) {
-    const forced = turn >= 2;
+  // Βήμα 1: ψάξιμο. Η AI γράφει σε κείμενο τι βρήκε, με τις διευθύνσεις των πηγών.
+  const messages: { role: string; content: unknown }[] = [{
+    role: "user",
+    content: `${user}\n\nΨάξε την επιχείρηση και γράψε σύντομα ό,τι βρήκες: επίσημο όνομα, κατηγορία, τηλέφωνο, email, website, διεύθυνση, αν είναι ανοιχτή ή έκλεισε, και τις διευθύνσεις (URL) των σελίδων που το λένε. Μόνο ό,τι είδες στα αποτελέσματα.`,
+  }];
+  const sources = new Set<string>();
+  let findings = "";
+  for (let turn = 0; turn < 3; turn++) {
     const r = await call({
-      model, max_tokens: 1500, system: SYSTEM, messages,
-      tools, // η αναζήτηση μένει στη λίστα: το ιστορικό της συζήτησης την αναφέρει
-      ...(forced ? { tool_choice: { type: "tool", name: "record" } } : {}),
+      model, max_tokens: 1500, system: SYSTEM.replace("Στο τέλος κάλεσε ΟΠΩΣΔΗΠΟΤΕ το εργαλείο record.", ""), messages,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
     });
-    usage.searches += r.usage?.server_tool_use?.web_search_requests ?? 0;
-    usage.input += r.usage?.input_tokens ?? 0;
-    usage.output += r.usage?.output_tokens ?? 0;
-    const rec = r.content.find((b) => b.type === "tool_use" && b.name === "record");
-    if (rec?.input) return { info: clean(rec.input as WebInfo), usage };
-    // Η AI δεν τελείωσε (pause_turn) ή απάντησε με κείμενο: συνεχίζουμε / τη ζητάμε ρητά
-    messages.push({ role: "assistant", content: r.content });
-    if (r.stop_reason !== "pause_turn") {
-      messages.push({ role: "user", content: "Κατέγραψε τώρα ό,τι βρήκες με το εργαλείο record." });
-      turn = Math.max(turn, 1);
+    count(r);
+    for (const b of r.content) {
+      if (b.type === "text" && typeof b.text === "string") findings += b.text + "\n";
+      if (b.type === "web_search_tool_result" && Array.isArray(b.content)) {
+        for (const it of b.content as { url?: string }[]) if (it?.url && sources.size < 12) sources.add(it.url);
+      }
     }
+    if (r.stop_reason !== "pause_turn") break;
+    messages.push({ role: "assistant", content: r.content });
   }
-  return { info: { status: "not_found", official_name: null, category: null, phone: null, email: null, website: null, address: null, confidence: 0, note: "Η AI δεν έδωσε απάντηση.", sources: [] }, usage };
+
+  // Βήμα 2: από το κείμενο σε καθαρά πεδία (χωρίς νέα αναζήτηση)
+  const r2 = await call({
+    model, max_tokens: 800, system: SYSTEM,
+    tools: [RECORD_TOOL], tool_choice: { type: "tool", name: "record" },
+    messages: [{
+      role: "user",
+      content: `${user}\n\nΕυρήματα από την αναζήτηση:\n${findings.slice(0, 6000) || "(κανένα)"}\n\nΣελίδες που βρέθηκαν:\n${[...sources].join("\n") || "(καμία)"}\n\nΚατέγραψε τα στοιχεία με το εργαλείο record. Αν τα ευρήματα δεν έχουν στοιχεία για αυτή την επιχείρηση, status = not_found.`,
+    }],
+  });
+  count(r2);
+  const rec = r2.content.find((b) => b.type === "tool_use" && b.name === "record");
+  const info = rec?.input ? clean(rec.input as WebInfo) : { status: "not_found" as const, official_name: null, category: null, phone: null, email: null, website: null, address: null, confidence: 0, note: "Η AI δεν έδωσε απάντηση.", sources: [] };
+  if (!info.sources.length) info.sources = [...sources].slice(0, 5);
+  // «Βρέθηκε» χωρίς κανένα στοιχείο δεν μας βοηθά: το μετράμε ως «δεν βρέθηκε»
+  if (info.status === "found" && !info.phone && !info.email && !info.website && !info.address && !info.category) {
+    info.status = "not_found";
+    info.note = info.note || "Βρέθηκαν αναφορές, αλλά χωρίς στοιχεία επικοινωνίας.";
+  }
+  return { info, usage };
 }
 
 function clean(v: WebInfo): WebInfo {

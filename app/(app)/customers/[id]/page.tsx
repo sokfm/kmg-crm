@@ -106,6 +106,8 @@ export default async function CustomerPage({
           <p className="muted" style={{ margin: 0 }}>{false ? "Η AI ψάχνει τώρα την επιχείρηση… ανανέωσε τη σελίδα σε λίγα δευτερόλεπτα." : "Δεν έχει γίνει αναζήτηση ακόμα."}</p>
         ) : (
           <>
+            {c.phone && <div><span>Τηλέφωνο</span><a href={`tel:${c.phone}`}>{c.phone}</a></div>}
+            {c.email && <div><span>Email</span><a href={`mailto:${c.email}`}>{c.email}</a></div>}
             {c.category && <div><span>Κατηγορία</span>{c.category}</div>}
             {c.website && <div><span>Site</span><a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">{c.website.replace(/^https?:\/\//, "")}</a></div>}
             {c.address && <div><span>Διεύθυνση</span>{c.address}</div>}
