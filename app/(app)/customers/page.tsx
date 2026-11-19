@@ -169,7 +169,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
               return (
                 <tr key={c.id}>
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
-                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link></td>
+                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link><div className="muted show-m">{c.owner_id ? `Πωλητής: ${c.profiles?.full_name?.split(" ")[0] ?? ""}` : "Βάση · χωρίς πωλητή"}</div></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
                   <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>

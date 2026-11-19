@@ -306,3 +306,5 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 .content { overflow-x: clip; }
 .badge.onair { background: var(--brand-grad); color: #0b0a0d; }
 .badge.faint { background: #f6f5f8; color: #8a8492; border: 1px solid #ebe8ef; }
+.show-m { display: none; }
+@media (max-width: 860px) { .show-m { display: block; font-size: 12px; } }
