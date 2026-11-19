@@ -8,7 +8,6 @@ type Slot = { station: string; slot: string; listeners_k: number; sort: number }
 const eur = (n: number) => new Intl.NumberFormat("el-GR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const num = (n: number, d = 4) => n.toLocaleString("el-GR", { maximumFractionDigits: d });
 const DOW = ["Κ", "Δ", "ΤΡ", "ΤΕ", "Π", "ΠΑ", "Σ"];
-const MONTH = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"];
 const MAX = 3; // μέγιστα σποτ ανά μισάωρο ανά ημέρα με το κλικ
 
 type Grid = Record<string, number[]>; // μισάωρο → σποτ ανά ημέρα του μήνα
@@ -20,11 +19,15 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
   const [product, setProduct] = useState("");
   const [grids, setGrids] = useState<Record<string, Grid>>({});
 
-  const [y, m] = start.split("-").map(Number);
-  const year = y || new Date().getFullYear();
-  const month = (m || 1) - 1;
-  const nDays = new Date(year, month + 1, 0).getDate();
-  const days = Array.from({ length: nDays }, (_, i) => new Date(year, month, i + 1).getDay());
+  // Το πλάνο ξεκινάει την ημερομηνία έναρξης και κρατάει ακριβώς 30 ημέρες
+  const [y, m, d0] = start.split("-").map(Number);
+  const today = new Date();
+  const first = y && m && d0 ? new Date(y, m - 1, d0) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const nDays = 30;
+  const dates = Array.from({ length: nDays }, (_, i) => new Date(first.getFullYear(), first.getMonth(), first.getDate() + i));
+  const days = dates.map((x) => x.getDay());
+  const last = dates[nDays - 1];
+  const fmtD = (x: Date) => `${x.getDate()}/${x.getMonth() + 1}/${x.getFullYear()}`;
 
   const rate = rates.find((r) => r.station === station) ?? { station, local_per_k: 0, direct_per_k: 0 };
   const rows = slots.filter((s) => s.station === station).sort((a, b) => a.sort - b.sort);
@@ -81,12 +84,12 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
           <select value={station} onChange={(e) => setStation(e.target.value)}>{rates.map((r) => <option key={r.station}>{r.station}</option>)}</select>
         </label>
         <label>Διάρκεια σποτ (sec)<input inputMode="numeric" value={sec} onChange={(e) => setSec(e.target.value)} /></label>
-        <label>Μήνας<input type="month" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+        <label>Ημερομηνία έναρξης<input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
         <div className="row" style={{ gap: 8, flexWrap: "wrap", padding: "10px 12px", borderBottom: "1px solid #eee", alignItems: "center" }}>
-          <strong>{station} · {MONTH[month]} {year}{product ? ` · ${product}` : ""}</strong>
+          <strong>{station} · {fmtD(first)} – {fmtD(last)} (30 ημέρες){product ? ` · ${product}` : ""}</strong>
           <span className="muted" style={{ fontSize: 12 }}>Κλικ σε κελί: 0→1→2→3 · κλικ στην ώρα: όλη η γραμμή · κλικ στην ημέρα: όλη η στήλη</span>
           <span style={{ flex: 1 }} />
           <button type="button" className="secondary" onClick={weekdaysOnly}>Μόνο Δευ–Παρ</button>
@@ -102,8 +105,9 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
                 <th>DIRECT €/sec</th>
                 <th>ΑΡΙΘ. ΜΕΤΑΔ.</th>
                 {days.map((w, d) => (
-                  <th key={d} onClick={() => fillCol(d)} style={{ ...S.cell, background: w === 0 || w === 6 ? "#f6f3f8" : "#fff", lineHeight: 1.1 }}>
-                    {d + 1}<br /><span className="muted" style={{ fontWeight: 500 }}>{DOW[w]}</span>
+                  <th key={d} onClick={() => fillCol(d)} title={`${fmtD(dates[d])}`}
+                    style={{ ...S.cell, background: w === 0 || w === 6 ? "#f6f3f8" : "#fff", lineHeight: 1.1, borderLeft: d > 0 && dates[d].getDate() === 1 ? "2px solid #B0128F" : S.cell.borderLeft }}>
+                    {dates[d].getDate()}<br /><span className="muted" style={{ fontWeight: 500 }}>{DOW[w]}</span>
                   </th>
                 ))}
                 <th style={{ textAlign: "right" }}>LOCAL €</th>
@@ -174,7 +178,7 @@ export function PlanCalculator({ rates, slots, defaultStart }: { rates: Rate[]; 
         })}
       </div>
       <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
-        Τιμές χωρίς ΦΠΑ και χωρίς εκπτώσεις. Οι μήνες επαναλαμβάνουν το πλάνο του μήνα που βλέπεις, όπως στο Excel. Συνολικά δευτερόλεπτα μήνα: {totalSec.toLocaleString("el-GR")}.
+        Τιμές χωρίς ΦΠΑ και χωρίς εκπτώσεις. Κάθε «μήνας» είναι 30 ημέρες και επαναλαμβάνει το πλάνο που βλέπεις, όπως στο Excel. Η μωβ γραμμή δείχνει πού αλλάζει ο μήνας. Συνολικά δευτερόλεπτα 30 ημερών: {totalSec.toLocaleString("el-GR")}.
       </p>
     </div>
   );

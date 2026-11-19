@@ -8,9 +8,7 @@ export default async function PlanPage() {
     supabase.from("station_rates").select("station, local_per_k, direct_per_k").order("sort"),
     supabase.from("station_slots").select("station, slot, listeners_k, sort").order("sort"),
   ]);
-  const now = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const defaultStart = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+  const defaultStart = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Athens" }).format(new Date());
   return (
     <main className="wrap" style={{ maxWidth: 1500 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
