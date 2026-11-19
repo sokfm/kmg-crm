@@ -13,7 +13,7 @@ const SORTS: Record<string, [string, boolean]> = {
 };
 
 type Row = {
-  id: string; display_name: string; category: string | null; status: string; closed_at: string | null; served_by: string | null; channel: string; agency: string | null; agency_id: string | null;
+  id: string; display_name: string; category: string | null; status: string; closed_at: string | null; served_by: string | null; is_group: boolean; parent: { display_name: string } | null; channel: string; agency: string | null; agency_id: string | null;
   last_period: string | null; lifetime_revenue: number; revenue_by_year: Record<string, number> | null; stations: string[] | null;
   owner_id: string | null; profiles: { full_name: string } | null;
 };
@@ -29,7 +29,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
 
   let q = supabase
     .from("customers")
-    .select("id, display_name, category, status, closed_at, served_by, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
+    .select("id, display_name, category, status, closed_at, served_by, is_group, parent:parent_id(display_name), channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
     .order(SORTS[sort][0], { ascending: SORTS[sort][1], nullsFirst: false })
     .order("lifetime_revenue", { ascending: false })
     .range(page * PAGE, page * PAGE + PAGE - 1);
@@ -39,7 +39,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   if (status === "recent") q = q.gte("last_period", monthsAgo(12)).lt("last_period", monthsAgo(0));
   if (status === "inactive") q = q.gte("last_period", monthsAgo(36)).lt("last_period", monthsAgo(12));
   if (status === "dormant") q = q.or(`last_period.lt.${monthsAgo(36)},last_period.is.null`);
-  if (status === "base") q = q.eq("status", "base");
+  if (status === "base") q = q.eq("status", "base").eq("is_group", false);
   if (status === "mine") q = q.eq("owner_id", profile.id);
   if (year === "never") q = q.is("last_period", null);
   else if (/^\d{4}$/.test(year)) q = q.gte("last_period", `${year}-01`).lte("last_period", `${year}-12`);
@@ -83,6 +83,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           {isAdmin && (
             <form id="merge" action="/customers/merge" className="row">
               <SubmitButton className="secondary">🔗 Ένωση επιλεγμένων</SubmitButton>
+              <button type="submit" formAction="/customers/group" className="secondary">Σε Group</button>
             </form>
           )}
         </div>
@@ -169,7 +170,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
               return (
                 <tr key={c.id}>
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
-                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link><div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
+                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link>{c.is_group && <span className="badge onair" style={{ marginLeft: 6 }}>Group</span>}{c.parent && <div className="muted" style={{ fontSize: 12 }}>Group: {c.parent.display_name}</div>}<div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
                   <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>

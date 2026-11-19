@@ -590,3 +590,33 @@ export async function updateCustomerInfo(f: FormData) {
   if (!data || data.length === 0) back(to, { conflict: "1" });
   back(to, { ok: "saved" });
 }
+
+// ---------- Groups (εταιρεία-ομπρέλα με brands) ----------
+
+export async function setGroupAction(f: FormData) {
+  const { supabase } = await requireProfile();
+  const ids = f.getAll("ids").map(String).flatMap((x) => x.split(",")).filter(Boolean);
+  const to = s(f, "back")?.startsWith("/") ? s(f, "back")! : "/customers";
+  const { data, error } = await supabase.rpc("set_group", { p_ids: ids, p_group: s(f, "group_id"), p_new_name: s(f, "new_name") });
+  revalidatePath("/customers");
+  if (error) back(to, { error: friendly(error.message) });
+  redirect(`/customers/${data}?ok=grouped`);
+}
+
+export async function leaveGroupAction(f: FormData) {
+  const { supabase } = await requireProfile();
+  const id = s(f, "id")!;
+  const { error } = await supabase.rpc("leave_group", { p_id: id });
+  revalidatePath(`/customers/${id}`);
+  if (error) back(`/customers/${id}`, { error: friendly(error.message) });
+  back(`/customers/${id}`, { ok: "ungrouped" });
+}
+
+export async function makeGroupAction(f: FormData) {
+  const { supabase } = await requireProfile();
+  const id = s(f, "id")!;
+  const { error } = await supabase.rpc("make_group", { p_id: id });
+  revalidatePath(`/customers/${id}`);
+  if (error) back(`/customers/${id}`, { error: friendly(error.message) });
+  back(`/customers/${id}`, { ok: "isgroup" });
+}

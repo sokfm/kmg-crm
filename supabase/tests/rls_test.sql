@@ -315,4 +315,25 @@ do $$ begin
 end $$;
 reset role;
 
+-- 19. Groups: brands κάτω από Group, ένα επίπεδο, μόνο admin
+reset role;
+insert into customers (id, display_name, lifetime_revenue) values
+ ('90000000-0000-0000-0000-000000000001','SMART MARKET',1000),('90000000-0000-0000-0000-000000000002','KGREEN',500);
+select as_user(3);
+do $$ begin
+  begin perform set_group(array['90000000-0000-0000-0000-000000000001']::uuid[], null, 'X'); assert false, 'πωλητής έφτιαξε Group';
+  exception when insufficient_privilege then null; end;
+end $$;
+select as_user(1);
+select set_group(array['90000000-0000-0000-0000-000000000001','90000000-0000-0000-0000-000000000002']::uuid[], null, 'κριματογλου');
+reset role;
+do $$ declare g uuid; begin
+  select id into g from customers where display_name = 'ΚΡΙΜΑΤΟΓΛΟΥ' and is_group;
+  assert g is not null, 'δεν φτιάχτηκε Group';
+  assert (select count(*) from customers where parent_id = g) = 2, 'τα brands δεν μπήκαν στο Group';
+  begin update customers set parent_id = '90000000-0000-0000-0000-000000000001' where id = '90000000-0000-0000-0000-000000000002';
+    assert false, 'brand μπήκε κάτω από brand';
+  exception when raise_exception then null; end;
+end $$;
+
 select 'ALL TESTS PASSED' as result;

@@ -3,7 +3,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr, customerState, aeLabel } from "@/lib/format";
-import { addActivity, decideWeb, renameCustomer, updateCustomerInfo, webLookup } from "../../actions";
+import { addActivity, decideWeb, leaveGroupAction, makeGroupAction, renameCustomer, setGroupAction, updateCustomerInfo, webLookup } from "../../actions";
 import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
@@ -16,10 +16,11 @@ export default async function CustomerPage({
 }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params;
   const sp = await searchParams;
+  const tab = ["activity", "history"].includes(sp.tab) ? sp.tab : "info";
   const { supabase, isAdmin } = await requireProfile();
   const { data: c } = await supabase
     .from("customers")
-    .select("*, profiles!customers_owner_id_fkey(full_name)")
+    .select("*, profiles!customers_owner_id_fkey(full_name), parent:parent_id(id, display_name)")
     .eq("id", id)
     .maybeSingle();
   if (!c) notFound();
@@ -54,7 +55,22 @@ export default async function CustomerPage({
   const people = (peopleData ?? []) as Person[];
   const { data: { user } } = await supabase.auth.getUser();
   const canEdit = isAdmin || c.owner_id === user?.id;
-  const byYear = Object.entries((c.revenue_by_year ?? {}) as Record<string, number>).sort(([a], [b]) => a.localeCompare(b));
+  // Group: brands από κάτω και συνολικά νούμερα· Brand: τα πρόσωπα του Group
+  type Brand = { id: string; display_name: string; lifetime_revenue: number; last_period: string | null; revenue_by_year: Record<string, number> | null; served_by: string | null; status: string; closed_at: string | null; profiles: { full_name: string } | null };
+  const { data: brandData } = c.is_group
+    ? await supabase.from("customers").select("id, display_name, lifetime_revenue, last_period, revenue_by_year, served_by, status, closed_at, profiles!customers_owner_id_fkey(full_name)").eq("parent_id", c.id).order("lifetime_revenue", { ascending: false })
+    : { data: [] };
+  const brands = (brandData ?? []) as unknown as Brand[];
+  const parent = c.parent as { id: string; display_name: string } | null;
+  const { data: groupPeopleData } = parent ? await supabase.from("contacts").select(PERSON_SELECT).eq("customer_id", parent.id) : { data: [] };
+  const groupPeople = (groupPeopleData ?? []) as Person[];
+  const yearsAll: Record<string, number> = { ...((c.revenue_by_year ?? {}) as Record<string, number>) };
+  for (const b of brands) for (const [y, v] of Object.entries(b.revenue_by_year ?? {})) yearsAll[y] = (yearsAll[y] ?? 0) + Number(v);
+  const totalRevenue = Number(c.lifetime_revenue) + brands.reduce((t, b) => t + Number(b.lifetime_revenue), 0);
+  const lastAll = [c.last_period, ...brands.map((b) => b.last_period)].filter(Boolean).sort().pop() ?? null;
+  const { data: groups } = isAdmin && !c.is_group ? await supabase.from("customers").select("id, display_name").eq("is_group", true).order("display_name") : { data: [] };
+  const href = (t: string) => `/customers/${c.id}${t === "info" ? "" : `?tab=${t}`}`;
+  const byYear = Object.entries(yearsAll).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...byYear.map(([, v]) => v));
   const lastActivity = acts?.find((a) => a.type !== "note");
 
@@ -75,6 +91,8 @@ export default async function CustomerPage({
             </form>
           )}
         </div>
+        {c.is_group && <div style={{ margin: "4px 0" }}><span className="badge onair">Group</span> <span className="muted">{brands.length === 1 ? "1 brand" : `${brands.length} brands`}</span></div>}
+        {parent && <div style={{ margin: "4px 0" }}><span className="muted">Brand του Group </span><Link href={`/customers/${parent.id}`} style={{ fontWeight: 700 }}>{parent.display_name} ›</Link></div>}
         <div className="muted">
           {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {customerState(c).label} · Account Executive: {aeLabel(c) ?? "κανείς (βάση)"}{c.served_by && c.served_by !== aeLabel(c) ? ` · τον εξυπηρετούσε: ${c.served_by}${c.served_by_period ? ` (ως ${periodGr(c.served_by_period)})` : ""}` : ""}
         </div>
@@ -93,13 +111,41 @@ export default async function CustomerPage({
       )}
 
       <div className="grid2">
-        <div className="card"><div className="muted">Συνολικός τζίρος</div><div className="kpi">{eur(c.lifetime_revenue)}</div></div>
+        <div className="card"><div className="muted">{c.is_group ? "Συνολικός τζίρος Group" : "Συνολικός τζίρος"}</div><div className="kpi">{eur(totalRevenue)}</div></div>
         <div className="card"><div className="muted">Πελάτης από</div><div className="kpi">{periodGr(c.first_period)}</div></div>
-        <div className="card"><div className="muted">Τελευταία καμπάνια</div><div className="kpi">{periodGr(c.last_period)}</div></div>
+        <div className="card"><div className="muted">Τελευταία καμπάνια</div><div className="kpi">{periodGr(lastAll)}</div></div>
         <div className="card"><div className="muted">Σταθμοί</div><div className="kpi" style={{ fontSize: 16 }}>{(c.stations ?? []).join(", ") || "—"}</div></div>
         <div className="card"><div className="muted">Τελευταία επαφή</div><div className="kpi">{lastActivity ? dateGr(lastActivity.occurred_at) : "—"}</div></div>
       </div>
 
+      <div className="sf-tabs" style={{ margin: "4px 0 0" }}>
+        <Link href={href("info")} className={tab === "info" ? "on" : ""}>Στοιχεία & Πρόσωπα</Link>
+        <Link href={href("activity")} className={tab === "activity" ? "on" : ""}>Δραστηριότητα</Link>
+        <Link href={href("history")} className={tab === "history" ? "on" : ""}>Ιστορικό</Link>
+      </div>
+
+      {tab === "info" && (
+        <>
+      {c.is_group && (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="day-head"><h2 className="grow" style={{ margin: 0 }}>Brands του Group</h2><span className="badge gray">{eur(totalRevenue)}</span></div>
+          {brands.length === 0 && <p className="muted" style={{ padding: 18, margin: 0 }}>Κανένα brand ακόμα. Από το Clients τσέκαρε πελάτες και πάτα «Σε Group».</p>}
+          {Number(c.lifetime_revenue) > 0 && (
+            <div className="day-row"><span className="grow"><strong>{c.display_name}</strong> <span className="muted">(το ίδιο το Group)</span></span><span className="muted">{periodGr(c.last_period)}</span><strong>{eur(c.lifetime_revenue)}</strong></div>
+          )}
+          {brands.map((b) => {
+            const st = customerState(b);
+            return (
+              <Link key={b.id} href={`/customers/${b.id}`} className="day-row" style={{ color: "inherit" }}>
+                <span className="grow"><strong>{b.display_name}</strong><div className="muted">AE: {b.profiles?.full_name ?? (b.served_by?.startsWith("Media shop") ? b.served_by : "βάση")}</div></span>
+                <span className={`badge ${st.cls}`}>{st.label}</span>
+                <span className="muted hide-s">{periodGr(b.last_period)}</span>
+                <strong>{eur(b.lifetime_revenue)}</strong>
+              </Link>
+            );
+          })}
+        </div>
+      )}
       <div className="cust-cols">
         <div className="card sf-fields">
           <h2 style={{ margin: 0 }}>Στοιχεία επιχείρησης</h2>
@@ -139,67 +185,59 @@ export default async function CustomerPage({
         <PeopleCard people={people} customerId={c.id} back={`/customers/${c.id}`} canEdit={canEdit} />
       </div>
 
-      {c.web_checked_at && (
-          <div className="card sf-fields">
-        <div className="row"><h2 className="grow" style={{ margin: 0 }}>Από το ίντερνετ</h2>
-          {c.web_status === "found" && <span className="badge good">βρέθηκε</span>}
-          {c.web_status === "closed" && <span className="badge late">φαίνεται κλειστή</span>}
-          {c.web_status === "not_found" && <span className="badge gray">δεν βρέθηκε</span>}
-        </div>
-        {!c.web_checked_at ? (
-          <p className="muted" style={{ margin: 0 }}>{false ? "Η AI ψάχνει τώρα την επιχείρηση… ανανέωσε τη σελίδα σε λίγα δευτερόλεπτα." : "Δεν έχει γίνει αναζήτηση ακόμα."}</p>
-        ) : (
-          <>
-            {c.category && <div><span>Κατηγορία</span>{c.category}</div>}
-            {c.website && <div><span>Site</span><a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">{c.website.replace(/^https?:\/\//, "")}</a></div>}
-            {c.address && <div><span>Διεύθυνση</span>{c.address}</div>}
-            {c.web_note && <div><span>Σημείωση AI</span>{c.web_note}</div>}
-            {(c.web_sources ?? []).length > 0 && <div><span>Πηγές</span>{(c.web_sources as string[]).slice(0, 3).map((u) => <a key={u} href={u} target="_blank" rel="noreferrer" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.replace(/^https?:\/\/(www\.)?/, "")}</a>)}</div>}
-            <p className="muted" style={{ margin: 0 }}>Η AI συμπληρώνει μόνο κενά πεδία· ό,τι έγραψες εσύ δεν αλλάζει. Έλεγξέ τα πριν τα χρησιμοποιήσεις.</p>
-          </>
-        )}
-        {isAdmin && (c.web_status === "not_found" || c.web_status === "closed") && (
-          <div className="row">
-            <span className="muted grow">{c.closed_at ? "Σημειωμένη ως κλειστή επιχείρηση." : "Υπάρχει ακόμα η επιχείρηση;"}</span>
-            <a className="btn secondary" href={`https://www.google.com/search?q=${encodeURIComponent(c.display_name + " Χαλκίδα")}`} target="_blank" rel="noreferrer">Google ↗</a>
-            <form action={decideWeb}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="closed" value="0" /><input type="hidden" name="back" value={`/customers/${c.id}`} /><SubmitButton className="secondary">Υπάρχει</SubmitButton></form>
-            {!c.closed_at && <form action={decideWeb}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="closed" value="1" /><input type="hidden" name="back" value={`/customers/${c.id}`} /><SubmitButton className="dark">Έκλεισε</SubmitButton></form>}
-          </div>
-        )}
-      </div>
-      )}
-
-      {raw.length > 0 && (
+      {parent && (
         <div className="card">
-          <h2>Όπως είναι γραμμένος στην τιμολόγηση</h2>
-          <p className="muted" style={{ marginTop: -4 }}>Οι εγγραφές του Excel που έχουν ενωθεί σε αυτόν τον πελάτη. Αν κάτι δεν ταιριάζει, διόρθωσε το όνομα (✏️) ή χώρισέ το από το Merge.</p>
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead><tr><th>Όνομα στο Excel</th><th>Account Executive</th><th>Agent</th><th>Περίοδος</th><th className="num">Γραμμές</th><th className="num">Ποσό</th></tr></thead>
-              <tbody>
-                {raw.map((r) => (
-                  <tr key={r.key}>
-                    <td><strong>{r.name}</strong></td><td>{r.acc ?? "—"}</td><td>{r.agent ?? "—"}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{periodGr(r.first)}{r.first !== r.last ? ` – ${periodGr(r.last)}` : ""}</td>
-                    <td className="num">{r.n}</td><td className="num">{eur(r.sum)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="row" style={{ marginBottom: 8 }}><h2 className="grow" style={{ margin: 0 }}>Πρόσωπα του Group {parent.display_name}</h2><Link href={`/customers/${parent.id}`} style={{ fontSize: 13, fontWeight: 700 }}>Άνοιγμα Group ›</Link></div>
+          {groupPeople.length === 0 && <p className="muted" style={{ margin: 0 }}>Δεν έχουν μπει πρόσωπα στο Group. Λογιστήριο, marketing κ.λπ. που ισχύουν για όλα τα brands, βάλ' τα εκεί.</p>}
+          <div className="people">
+            {groupPeople.map((p) => (
+              <div key={p.id} className="person">
+                <strong>{p.name ?? p.email}</strong> <span className="muted">{p.title ?? ""}</span>
+                <div className="person-links">
+                  {p.mobile && <a href={`tel:${p.mobile}`}>📱 {p.mobile}</a>}
+                  {p.phone && <a href={`tel:${p.phone}`}>☎ {p.phone}</a>}
+                  {p.email && <a href={`mailto:${p.email}`}>✉ {p.email}</a>}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
-
-      {byYear.length > 0 && (
+      {isAdmin && !c.is_group && (
         <div className="card">
-          <h2>Τζίρος ανά έτος</h2>
-          <div className="bars">
-            {byYear.map(([y, v]) => <div key={y} title={`${y}: ${eur(v)}`} style={{ height: `${(v / max) * 100}%` }} />)}
-          </div>
-          <div className="bars-labels">{byYear.map(([y]) => <span key={y}>{y.slice(2)}</span>)}</div>
+          <h2>Group</h2>
+          {parent ? (
+            <form action={leaveGroupAction} className="row">
+              <input type="hidden" name="id" value={c.id} />
+              <span className="grow">Brand του Group <strong>{parent.display_name}</strong>.</span>
+              <SubmitButton className="secondary">Βγάλ' το από το Group</SubmitButton>
+            </form>
+          ) : (
+            <div className="stack" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <p className="muted" style={{ margin: 0 }}>Αν η επιχείρηση ανήκει σε μεγαλύτερη εταιρεία ή ο ιδιοκτήτης έχει κι άλλα μαγαζιά, βάλ' την σε Group.</p>
+              <form action={setGroupAction} className="row">
+                <input type="hidden" name="ids" value={c.id} />
+                <input type="hidden" name="back" value={`/customers/${c.id}`} />
+                <select name="group_id" defaultValue="" className="grow">
+                  <option value="">Νέο Group…</option>
+                  {(groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.display_name}</option>)}
+                </select>
+                <input name="new_name" placeholder="Όνομα νέου Group" />
+                <SubmitButton className="secondary">Μέσα στο Group</SubmitButton>
+              </form>
+              <form action={makeGroupAction}>
+                <input type="hidden" name="id" value={c.id} />
+                <SubmitButton className="secondary">Αυτός ο πελάτης είναι Group (έχει brands από κάτω)</SubmitButton>
+              </form>
+            </div>
+          )}
         </div>
       )}
+        </>
+      )}
 
+      {tab === "activity" && (
+        <>
       <div className="card">
         <h2>Εργασίες</h2>
         <TaskList tasks={openTasks} back={`/customers/${c.id}`} showTarget={false} showOwner />
@@ -241,10 +279,25 @@ export default async function CustomerPage({
         </div>
       )}
 
+        </>
+      )}
+
+      {tab === "history" && (
+        <>
+      {byYear.length > 0 && (
+        <div className="card">
+          <h2>Τζίρος ανά έτος</h2>
+          <div className="bars">
+            {byYear.map(([y, v]) => <div key={y} title={`${y}: ${eur(v)}`} style={{ height: `${(v / max) * 100}%` }} />)}
+          </div>
+          <div className="bars-labels">{byYear.map(([y]) => <span key={y}>{y.slice(2)}</span>)}</div>
+        </div>
+      )}
+
       <div className="card">
         <div className="row">
           <h2 className="grow">Τιμολόγηση (αρχείο)</h2>
-          {!sp.all && <Link href={`/customers/${id}?all=1`}>Όλο το ιστορικό</Link>}
+          {!sp.all && <Link href={`/customers/${id}?tab=history&all=1`}>Όλο το ιστορικό</Link>}
         </div>
         <table>
           <thead><tr><th>Μήνας</th><th>Σταθμός</th><th>Ποσό</th><th>Πακέτο</th></tr></thead>
@@ -260,6 +313,59 @@ export default async function CustomerPage({
           </tbody>
         </table>
       </div>
+      {raw.length > 0 && (
+        <div className="card">
+          <h2>Όπως είναι γραμμένος στην τιμολόγηση</h2>
+          <p className="muted" style={{ marginTop: -4 }}>Οι εγγραφές του Excel που έχουν ενωθεί σε αυτόν τον πελάτη. Αν κάτι δεν ταιριάζει, διόρθωσε το όνομα (✏️) ή χώρισέ το από το Merge.</p>
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead><tr><th>Όνομα στο Excel</th><th>Account Executive</th><th>Agent</th><th>Περίοδος</th><th className="num">Γραμμές</th><th className="num">Ποσό</th></tr></thead>
+              <tbody>
+                {raw.map((r) => (
+                  <tr key={r.key}>
+                    <td><strong>{r.name}</strong></td><td>{r.acc ?? "—"}</td><td>{r.agent ?? "—"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{periodGr(r.first)}{r.first !== r.last ? ` – ${periodGr(r.last)}` : ""}</td>
+                    <td className="num">{r.n}</td><td className="num">{eur(r.sum)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {c.web_checked_at && (
+          <div className="card sf-fields">
+        <div className="row"><h2 className="grow" style={{ margin: 0 }}>Από το ίντερνετ</h2>
+          {c.web_status === "found" && <span className="badge good">βρέθηκε</span>}
+          {c.web_status === "closed" && <span className="badge late">φαίνεται κλειστή</span>}
+          {c.web_status === "not_found" && <span className="badge gray">δεν βρέθηκε</span>}
+        </div>
+        {!c.web_checked_at ? (
+          <p className="muted" style={{ margin: 0 }}>{false ? "Η AI ψάχνει τώρα την επιχείρηση… ανανέωσε τη σελίδα σε λίγα δευτερόλεπτα." : "Δεν έχει γίνει αναζήτηση ακόμα."}</p>
+        ) : (
+          <>
+            {c.category && <div><span>Κατηγορία</span>{c.category}</div>}
+            {c.website && <div><span>Site</span><a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">{c.website.replace(/^https?:\/\//, "")}</a></div>}
+            {c.address && <div><span>Διεύθυνση</span>{c.address}</div>}
+            {c.web_note && <div><span>Σημείωση AI</span>{c.web_note}</div>}
+            {(c.web_sources ?? []).length > 0 && <div><span>Πηγές</span>{(c.web_sources as string[]).slice(0, 3).map((u) => <a key={u} href={u} target="_blank" rel="noreferrer" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.replace(/^https?:\/\/(www\.)?/, "")}</a>)}</div>}
+            <p className="muted" style={{ margin: 0 }}>Η AI συμπληρώνει μόνο κενά πεδία· ό,τι έγραψες εσύ δεν αλλάζει. Έλεγξέ τα πριν τα χρησιμοποιήσεις.</p>
+          </>
+        )}
+        {isAdmin && (c.web_status === "not_found" || c.web_status === "closed") && (
+          <div className="row">
+            <span className="muted grow">{c.closed_at ? "Σημειωμένη ως κλειστή επιχείρηση." : "Υπάρχει ακόμα η επιχείρηση;"}</span>
+            <a className="btn secondary" href={`https://www.google.com/search?q=${encodeURIComponent(c.display_name + " Χαλκίδα")}`} target="_blank" rel="noreferrer">Google ↗</a>
+            <form action={decideWeb}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="closed" value="0" /><input type="hidden" name="back" value={`/customers/${c.id}`} /><SubmitButton className="secondary">Υπάρχει</SubmitButton></form>
+            {!c.closed_at && <form action={decideWeb}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="closed" value="1" /><input type="hidden" name="back" value={`/customers/${c.id}`} /><SubmitButton className="dark">Έκλεισε</SubmitButton></form>}
+          </div>
+        )}
+      </div>
+      )}
+
+        </>
+      )}
     </main>
   );
 }
