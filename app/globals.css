@@ -57,7 +57,7 @@ nav.top .inner { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display:
 nav.top a { padding: 7px 10px; border-radius: 8px; color: #3d4350; font-size: 14px; }
 nav.top a.logo { font-weight: 700; color: var(--ink); margin-right: 8px; }
 nav.bottom { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line); display: none; justify-content: space-around; padding: 8px 4px 18px; z-index: 10; }
-nav.bottom a { font-size: 12px; color: #3d4350; padding: 6px 8px; }
+nav.bottom a { font-size: 12px; color: #3d4350; padding: 6px 4px; }
 @media (max-width: 720px) {
   nav.top .links { display: none; }
   nav.bottom { display: flex; }
