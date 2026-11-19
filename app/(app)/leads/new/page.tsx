@@ -72,6 +72,7 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
           <label>Επόμενο βήμα *<input name="next_step" required defaultValue={sp.next_step} placeholder="π.χ. Τηλέφωνο για ραντεβού" /></label>
           <label>Πότε *<input name="next_step_due" type="date" required defaultValue={sp.next_step_due ?? tomorrow} /></label>
         </div>
+        <label>Εκτιμώμενη αξία (€, αν την ξέρεις)<input name="expected_value" inputMode="decimal" placeholder="π.χ. 1.500" /></label>
         <label>Σημειώσεις<textarea name="notes" defaultValue={sp.notes} /></label>
         {!isAdmin && <p className="muted">Αν το βρήκες εσύ, μένει σε σένα. Αλλιώς πάει στον Νίκο για ανάθεση. Τα digital πάνε στη Μαρία.</p>}
         <SubmitButton>Καταχώριση</SubmitButton>

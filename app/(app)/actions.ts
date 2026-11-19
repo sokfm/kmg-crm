@@ -8,6 +8,12 @@ const s = (f: FormData, k: string) => {
   const v = f.get(k);
   return v == null || String(v).trim() === "" ? null : String(v).trim();
 };
+// «1.500», «1500,50», «1.500 €» → αριθμός
+const money = (v: string | null) => {
+  if (!v) return null;
+  const n = Number(v.replace(/[€\s]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
 const back = (path: string, params: Record<string, string>) =>
   redirect(`${path}?${new URLSearchParams(params).toString()}`);
 
@@ -50,6 +56,7 @@ export async function createLead(f: FormData) {
       next_step_due: s(f, "next_step_due"),
       notes: s(f, "notes"),
       owner_id: s(f, "owner_id"),
+      expected_value: money(s(f, "expected_value")),
     })
     .select("id")
     .single();
@@ -73,6 +80,7 @@ export async function updateLead(f: FormData) {
     phone: s(f, "phone"),
     email: s(f, "email"),
     notes: s(f, "notes"),
+    expected_value: money(s(f, "expected_value")),
     lost_kind: status === "lost" ? s(f, "lost_kind") : null,
     lost_reason: status === "lost" ? s(f, "lost_reason") : null,
   };
@@ -86,6 +94,37 @@ export async function updateLead(f: FormData) {
   if (!data || data.length === 0) back(`/leads/${id}`, { conflict: "1" });
   revalidatePath("/today");
   back(`/leads/${id}`, { ok: "saved" });
+}
+
+// Μετακίνηση κάρτας στο pipeline. Κάθε μετακίνηση ζητά επόμενο βήμα (ανοιχτό deal)
+// ή είδος «όχι» (χαμένο). Με έλεγχο έκδοσης: δεν γράφουμε πάνω σε αλλαγή άλλου.
+export async function moveLead(f: FormData) {
+  const { supabase } = await requireProfile();
+  const id = s(f, "id")!;
+  const status = s(f, "status")!;
+  const patch: Record<string, unknown> = { status };
+  if (f.has("expected_value")) patch.expected_value = money(s(f, "expected_value"));
+  if (status === "lost") {
+    patch.lost_kind = s(f, "lost_kind");
+    patch.lost_reason = s(f, "lost_reason");
+    if (!patch.lost_kind) back("/pipeline", { error: "Διάλεξε τι «όχι» ήταν" });
+  } else {
+    patch.lost_kind = null;
+    patch.lost_reason = null;
+  }
+  if (status !== "won" && status !== "lost") {
+    patch.next_step = s(f, "next_step");
+    patch.next_step_due = s(f, "next_step_due");
+  } else if (s(f, "next_step")) {
+    patch.next_step = s(f, "next_step");
+    patch.next_step_due = s(f, "next_step_due");
+  }
+  const { data, error } = await supabase.from("leads").update(patch).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
+  revalidatePath("/pipeline");
+  revalidatePath("/today");
+  if (error) back("/pipeline", { error: friendly(error.message) });
+  if (!data || data.length === 0) back("/pipeline", { conflict: "1" });
+  back("/pipeline", { ok: status === "won" ? "won" : "moved" });
 }
 
 export async function assignLead(f: FormData) {

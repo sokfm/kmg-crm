@@ -88,6 +88,7 @@ export default async function LeadPage({
             </label>
             <label>Επόμενο βήμα<input name="next_step" defaultValue={lead.next_step ?? ""} /></label>
             <label>Πότε<input name="next_step_due" type="date" defaultValue={lead.next_step_due ?? ""} /></label>
+            <label>Εκτιμώμενη αξία (€)<input name="expected_value" inputMode="decimal" defaultValue={lead.expected_value ?? ""} placeholder="π.χ. 1.500" /></label>
             <label>Υπεύθυνος επικοινωνίας<input name="contact_name" defaultValue={lead.contact_name ?? ""} /></label>
             <label>Τηλέφωνο<input name="phone" defaultValue={lead.phone ?? ""} /></label>
             <label>Email<input name="email" defaultValue={lead.email ?? ""} /></label>
