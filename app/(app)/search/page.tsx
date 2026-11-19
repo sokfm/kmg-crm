@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { STAGES, eur, periodGr } from "@/lib/format";
+import { STAGES, eur, periodGr, customerState } from "@/lib/format";
 
 // Αναζήτηση παντού (Ctrl K): πελάτες, leads, media shops.
 export default async function Search({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -38,7 +38,7 @@ export default async function Search({ searchParams }: { searchParams: Promise<R
       <div className="list">
         {customers.map((x) => (
           <Link key={x.id} href={`/customers/${x.id}`} className="item">
-            <span className="grow"><span className="title">{x.display_name}</span><div className="muted">{x.status === "active" ? "Ενεργός" : "Βάση"} · τελευταία {periodGr(x.last_period)}</div></span>
+            <span className="grow"><span className="title">{x.display_name}</span><div className="muted">{customerState(x).label} · τελευταία {periodGr(x.last_period)}</div></span>
             <span className="badge gray">{eur(x.lifetime_revenue)}</span>
           </Link>
         ))}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
-import { CHANNEL, eur, periodGr } from "@/lib/format";
+import { CHANNEL, customerState, eur, periodGr } from "@/lib/format";
 import { claimCustomer, decideClaim } from "../actions";
 import { Flash } from "@/components/Flash";
 
@@ -13,7 +13,7 @@ const SORTS: Record<string, [string, boolean]> = {
 };
 
 type Row = {
-  id: string; display_name: string; category: string | null; status: string; channel: string; agency: string | null; agency_id: string | null;
+  id: string; display_name: string; category: string | null; status: string; closed_at: string | null; channel: string; agency: string | null; agency_id: string | null;
   last_period: string | null; lifetime_revenue: number; revenue_by_year: Record<string, number> | null; stations: string[] | null;
   owner_id: string | null; profiles: { full_name: string } | null;
 };
@@ -21,7 +21,7 @@ type Row = {
 export default async function Customers({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
   const { supabase, isAdmin, isCeo, profile } = await requireProfile();
-  const status = ["all", "active", "base", "mine", "closed"].includes(sp.status) ? sp.status : isAdmin ? "all" : "mine";
+  const status = ["all", "onair", "renew", "active", "base", "mine", "closed"].includes(sp.status) ? sp.status : isAdmin ? "all" : "mine";
   const year = sp.year ?? "";
   const sort = SORTS[sp.sort] ? sp.sort : "last";
   const page = Math.max(0, Number(sp.page) || 0);
@@ -29,12 +29,15 @@ export default async function Customers({ searchParams }: { searchParams: Promis
 
   let q = supabase
     .from("customers")
-    .select("id, display_name, category, status, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
+    .select("id, display_name, category, status, closed_at, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
     .order(SORTS[sort][0], { ascending: SORTS[sort][1], nullsFirst: false })
     .order("lifetime_revenue", { ascending: false })
     .range(page * PAGE, page * PAGE + PAGE - 1);
   if (status === "closed") q = q.not("closed_at", "is", null);
   else q = q.is("closed_at", null);
+  const cur = new Date().toISOString().slice(0, 7);
+  if (status === "onair") q = q.gte("last_period", cur);
+  if (status === "renew") q = q.eq("status", "active").lt("last_period", cur);
   if (status === "active") q = q.eq("status", "active");
   if (status === "base") q = q.eq("status", "base");
   if (status === "mine") q = q.eq("owner_id", profile.id);
@@ -85,7 +88,8 @@ export default async function Customers({ searchParams }: { searchParams: Promis
         </div>
         <div className="row">
           {isAdmin && chip("all", "Όλοι")}
-          {chip("active", "Ενεργοί")}
+          {chip("onair", "Παίζουν τώρα")}
+          {chip("renew", "Για ανανέωση")}
           {chip("base", "Βάση (χωρίς υπεύθυνο)")}
           {chip("mine", "Οι δικοί μου")}
           {isAdmin && chip("closed", "Κλειστές επιχειρήσεις")}
@@ -165,7 +169,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
                   <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
-                  <td><span className={`badge ${c.status === "active" ? "good" : "gray"}`}>{c.status === "active" ? "Ενεργός" : "Βάση"}</span></td>
+                  <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>
                   <td className="num hide-m">{ly ? eur(c.revenue_by_year?.[ly] ?? 0) : "—"}</td>
                   <td className="num"><strong>{eur(c.lifetime_revenue)}</strong></td>

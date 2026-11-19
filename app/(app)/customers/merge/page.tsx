@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
-import { eur, periodGr } from "@/lib/format";
+import { eur, periodGr, customerState } from "@/lib/format";
 import { mergeCustomers } from "../../actions";
 import { Flash } from "@/components/Flash";
 
@@ -45,7 +45,7 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
                 <span className="grow">
                   <strong>{c.display_name}</strong>
                   <div className="muted">
-                    {c.status === "active" ? "Ενεργός" : "Βάση"} · {periodGr(c.first_period)} – {periodGr(c.last_period)} · {(c.stations ?? []).join(", ")}
+                    {customerState(c).label} · {periodGr(c.first_period)} – {periodGr(c.last_period)} · {(c.stations ?? []).join(", ")}
                     {c.agency ? ` · ${c.agency}` : ""} · {c.profiles?.full_name ?? "χωρίς υπεύθυνο"}
                   </div>
                 </span>

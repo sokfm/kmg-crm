@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
-import { ACTIVITY, dateGr, eur, periodGr } from "@/lib/format";
+import { ACTIVITY, dateGr, eur, periodGr, customerState } from "@/lib/format";
 import { addActivity, updateAgencyDomains } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
@@ -79,7 +79,7 @@ export default async function AgencyPage({
         <div className="list">
           {(custs ?? []).map((c) => (
             <Link key={c.id} href={`/customers/${c.id}`} className="item">
-              <div className="grow">{c.display_name}<div className="muted">{c.status === "base" ? "Στη βάση" : "Ενεργός"} · τελευταία: {periodGr(c.last_period)}</div></div>
+              <div className="grow">{c.display_name}<div className="muted">{customerState(c).label} · τελευταία: {periodGr(c.last_period)}</div></div>
               <span className="badge gray">{eur(c.lifetime_revenue)}</span>
             </Link>
           ))}

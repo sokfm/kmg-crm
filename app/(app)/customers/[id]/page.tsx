@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
-import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr } from "@/lib/format";
+import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr, customerState } from "@/lib/format";
 import { addActivity, decideWeb, renameCustomer, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
@@ -57,7 +57,7 @@ export default async function CustomerPage({
           )}
         </div>
         <div className="muted">
-          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {c.closed_at ? "Κλειστή επιχείρηση" : c.status === "base" ? "Στη βάση" : "Ενεργός"} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
+          {CHANNEL[c.channel]}{c.agency_id ? <> · <Link href={`/agencies/${c.agency_id}`}>🏢 {c.agency}</Link></> : c.agency ? ` · ${c.agency}` : ""} · {customerState(c).label === "Παίζει" ? "Παίζει τώρα" : customerState(c).label === "Κλειστή" ? "Κλειστή επιχείρηση" : customerState(c).label} · Υπεύθυνος: {c.profiles?.full_name ?? "κανείς"}
         </div>
       </div>
       <Flash sp={sp} />

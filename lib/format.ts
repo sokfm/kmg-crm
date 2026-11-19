@@ -45,3 +45,14 @@ export const CHANNEL: Record<string, string> = {
 export function today() {
   return new Date().toISOString().slice(0, 10);
 }
+
+// Κατάσταση πελάτη όπως τη λέμε στην πράξη:
+// «Παίζει» = έχει καμπάνια αυτόν τον μήνα ή αργότερα· «Για ανανέωση» = έχει πωλητή αλλά η καμπάνια τελείωσε·
+// «Βάση» = χωρίς πωλητή· «Κλειστή» = η επιχείρηση έκλεισε.
+export function customerState(c: { status: string; last_period: string | null; closed_at?: string | null }): { label: string; cls: string } {
+  if (c.closed_at) return { label: "Κλειστή", cls: "gray" };
+  const cur = new Date().toISOString().slice(0, 7);
+  if (c.last_period && c.last_period >= cur) return { label: "Παίζει", cls: "good" };
+  if (c.status === "active") return { label: "Για ανανέωση", cls: "late" };
+  return { label: "Βάση", cls: "gray" };
+}
