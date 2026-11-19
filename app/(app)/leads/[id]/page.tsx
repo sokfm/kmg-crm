@@ -7,6 +7,7 @@ import { addActivity, updateLead, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 import { StagePath } from "@/components/MoveDialog";
+import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
 
 const SOURCES: Record<string, string> = {
   phone: "Τηλέφωνο", site: "Site", facebook: "Facebook", seller: "Account Executive", base: "Βάση πελατών",
@@ -40,6 +41,8 @@ export default async function LeadPage({
       : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
   ]);
   const people = (peopleData ?? []) as { id: string; full_name: string }[];
+  const { data: contactData } = await supabase.from("contacts").select(PERSON_SELECT).eq("lead_id", id);
+  const persons = (contactData ?? []) as Person[];
 
   // Αν το lead αφορά υπάρχοντα πελάτη: το ιστορικό του από την τιμολόγηση
   const [{ data: cust }, { data: lines }] = lead.customer_id
@@ -259,6 +262,7 @@ export default async function LeadPage({
             <h2>Εργασίες ({openTasks.length})</h2>
             <NewTaskForm back={`/leads/${lead.id}`} leadId={lead.id} />
           </div>
+          <PeopleCard people={persons} leadId={lead.id} back={`/leads/${lead.id}`} canEdit />
           <div className="card sf-fields">
             <h2>Πληροφορίες</h2>
             <div><span>Πηγή</span>{SOURCES[lead.source] ?? lead.source}</div>

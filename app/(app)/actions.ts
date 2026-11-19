@@ -524,3 +524,69 @@ export async function setPassword(f: FormData) {
   if (error) back("/settings", { error: /reauth|recent/i.test(error.message) ? "Για ασφάλεια, βγες και ξαναμπές με email και ξαναδοκίμασε" : /same|different/i.test(error.message) ? "Είναι ίδιος με τον προηγούμενο" : /weak|pwned|leaked/i.test(error.message) ? "Πολύ εύκολος κωδικός· βάλε πιο δύσκολο" : friendly(error.message) });
   back("/settings", { ok: "password" });
 }
+
+// ---------- Πρόσωπα επιχείρησης ----------
+
+export async function saveContact(f: FormData) {
+  const { supabase, profile } = await requireProfile();
+  const to = s(f, "back")?.startsWith("/") ? s(f, "back")! : "/customers";
+  const email = s(f, "email")?.toLowerCase() ?? null;
+  const row = {
+    name: s(f, "name"),
+    title: s(f, "title"),
+    email,
+    phone: s(f, "phone"),
+    mobile: s(f, "mobile"),
+    birthday: s(f, "birthday"),
+    notes: s(f, "notes"),
+    roles: f.getAll("roles").map(String),
+    is_primary: s(f, "is_primary") === "1",
+    do_not_contact: s(f, "do_not_contact") === "1",
+  };
+  if (!row.name && !row.email && !row.phone && !row.mobile) back(to, { error: "Γράψε τουλάχιστον όνομα, τηλέφωνο ή email" });
+  const id = s(f, "id");
+  let error;
+  if (id) {
+    const res = await supabase.from("contacts").update(row).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
+    error = res.error;
+    if (!error && (!res.data || res.data.length === 0)) back(to, { conflict: "1" });
+  } else {
+    ({ error } = await supabase.from("contacts").insert({ ...row, customer_id: s(f, "customer_id"), lead_id: s(f, "lead_id"), created_by: profile.id }));
+  }
+  revalidatePath(to);
+  if (error) back(to, { error: /contacts_email_unique|duplicate/i.test(error.message) ? "Αυτό το email υπάρχει ήδη σε άλλο πρόσωπο (ίσως σε άλλον πελάτη ή lead)" : friendly(error.message) });
+  back(to, { ok: "person" });
+}
+
+export async function deleteContact(f: FormData) {
+  const { supabase } = await requireProfile();
+  const to = s(f, "back")?.startsWith("/") ? s(f, "back")! : "/customers";
+  const { error } = await supabase.from("contacts").delete().eq("id", s(f, "id")!);
+  revalidatePath(to);
+  if (error) back(to, { error: friendly(error.message) });
+  back(to, { ok: "persondel" });
+}
+
+// Στοιχεία επιχείρησης (με έλεγχο ταυτόχρονης αλλαγής)
+export async function updateCustomerInfo(f: FormData) {
+  const { supabase } = await requireProfile();
+  const id = s(f, "id")!;
+  const to = `/customers/${id}`;
+  const { data, error } = await supabase.from("customers").update({
+    legal_name: s(f, "legal_name"),
+    afm: s(f, "afm"),
+    doy: s(f, "doy"),
+    category: s(f, "category"),
+    phone: s(f, "phone"),
+    email: s(f, "email")?.toLowerCase() ?? null,
+    website: s(f, "website"),
+    address: s(f, "address"),
+    facebook: s(f, "facebook"),
+    instagram: s(f, "instagram"),
+    notes: s(f, "notes"),
+  }).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
+  revalidatePath(to);
+  if (error) back(to, { error: friendly(error.message) });
+  if (!data || data.length === 0) back(to, { conflict: "1" });
+  back(to, { ok: "saved" });
+}

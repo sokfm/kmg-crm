@@ -3,7 +3,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr, customerState, aeLabel } from "@/lib/format";
-import { addActivity, decideWeb, renameCustomer, webLookup } from "../../actions";
+import { addActivity, decideWeb, renameCustomer, updateCustomerInfo, webLookup } from "../../actions";
+import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
 import { Flash } from "@/components/Flash";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
@@ -49,6 +50,10 @@ export default async function CustomerPage({
     rawMap.set(key, e);
   }
   const raw = [...rawMap.values()].sort((a, b) => b.last.localeCompare(a.last));
+  const { data: peopleData } = await supabase.from("contacts").select(PERSON_SELECT).eq("customer_id", c.id);
+  const people = (peopleData ?? []) as Person[];
+  const { data: { user } } = await supabase.auth.getUser();
+  const canEdit = isAdmin || c.owner_id === user?.id;
   const byYear = Object.entries((c.revenue_by_year ?? {}) as Record<string, number>).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...byYear.map(([, v]) => v));
   const lastActivity = acts?.find((a) => a.type !== "note");
@@ -95,6 +100,45 @@ export default async function CustomerPage({
         <div className="card"><div className="muted">Τελευταία επαφή</div><div className="kpi">{lastActivity ? dateGr(lastActivity.occurred_at) : "—"}</div></div>
       </div>
 
+      <div className="cust-cols">
+        <div className="card sf-fields">
+          <h2 style={{ margin: 0 }}>Στοιχεία επιχείρησης</h2>
+          {c.legal_name && <div><span>Επωνυμία</span>{c.legal_name}</div>}
+          {(c.afm || c.doy) && <div><span>ΑΦΜ / ΔΟΥ</span>{[c.afm, c.doy].filter(Boolean).join(" · ")}</div>}
+          {c.category && <div><span>Κατηγορία</span>{c.category}</div>}
+          <div><span>Τηλέφωνο</span>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : "—"}</div>
+          <div><span>Email</span>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : "—"}</div>
+          {c.website && <div><span>Site</span><a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">{c.website.replace(/^https?:\/\//, "")}</a></div>}
+          {c.address && <div><span>Διεύθυνση</span><a href={`https://maps.google.com/?q=${encodeURIComponent(c.address)}`} target="_blank" rel="noreferrer">{c.address}</a></div>}
+          {(c.facebook || c.instagram) && <div><span>Social</span>{c.facebook && <a href={c.facebook.startsWith("http") ? c.facebook : `https://facebook.com/${c.facebook}`} target="_blank" rel="noreferrer" style={{ marginRight: 10 }}>Facebook</a>}{c.instagram && <a href={c.instagram.startsWith("http") ? c.instagram : `https://instagram.com/${c.instagram.replace(/^@/, "")}`} target="_blank" rel="noreferrer">Instagram</a>}</div>}
+          {c.notes && <div><span>Σημειώσεις</span><span style={{ whiteSpace: "pre-wrap" }}>{c.notes}</span></div>}
+          {canEdit && (
+            <details>
+              <summary style={{ cursor: "pointer", fontWeight: 700 }}>✏️ Επεξεργασία στοιχείων</summary>
+              <form action={updateCustomerInfo} className="stack" style={{ marginTop: 10 }}>
+                <input type="hidden" name="id" value={c.id} />
+                <input type="hidden" name="version" value={c.version} />
+                <div className="grid2">
+                  <label>Επωνυμία (τιμολόγηση)<input name="legal_name" defaultValue={c.legal_name ?? ""} /></label>
+                  <label>Κατηγορία<input name="category" defaultValue={c.category ?? ""} placeholder="π.χ. Εστίαση – καφέ" /></label>
+                  <label>ΑΦΜ<input name="afm" inputMode="numeric" defaultValue={c.afm ?? ""} /></label>
+                  <label>ΔΟΥ<input name="doy" defaultValue={c.doy ?? ""} /></label>
+                  <label>Τηλέφωνο<input name="phone" type="tel" defaultValue={c.phone ?? ""} /></label>
+                  <label>Email (γενικό)<input name="email" type="email" defaultValue={c.email ?? ""} /></label>
+                  <label>Site<input name="website" defaultValue={c.website ?? ""} /></label>
+                  <label>Διεύθυνση<input name="address" defaultValue={c.address ?? ""} /></label>
+                  <label>Facebook<input name="facebook" defaultValue={c.facebook ?? ""} /></label>
+                  <label>Instagram<input name="instagram" defaultValue={c.instagram ?? ""} placeholder="@onoma" /></label>
+                </div>
+                <label>Σημειώσεις<textarea name="notes" defaultValue={c.notes ?? ""} /></label>
+                <div><SubmitButton>Αποθήκευση</SubmitButton></div>
+              </form>
+            </details>
+          )}
+        </div>
+        <PeopleCard people={people} customerId={c.id} back={`/customers/${c.id}`} canEdit={canEdit} />
+      </div>
+
       {c.web_checked_at && (
           <div className="card sf-fields">
         <div className="row"><h2 className="grow" style={{ margin: 0 }}>Από το ίντερνετ</h2>
@@ -106,8 +150,6 @@ export default async function CustomerPage({
           <p className="muted" style={{ margin: 0 }}>{false ? "Η AI ψάχνει τώρα την επιχείρηση… ανανέωσε τη σελίδα σε λίγα δευτερόλεπτα." : "Δεν έχει γίνει αναζήτηση ακόμα."}</p>
         ) : (
           <>
-            {c.phone && <div><span>Τηλέφωνο</span><a href={`tel:${c.phone}`}>{c.phone}</a></div>}
-            {c.email && <div><span>Email</span><a href={`mailto:${c.email}`}>{c.email}</a></div>}
             {c.category && <div><span>Κατηγορία</span>{c.category}</div>}
             {c.website && <div><span>Site</span><a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noreferrer">{c.website.replace(/^https?:\/\//, "")}</a></div>}
             {c.address && <div><span>Διεύθυνση</span>{c.address}</div>}

@@ -296,4 +296,23 @@ do $$ begin
   assert (select owner_id from customers where id='70000000-0000-0000-0000-000000000003') is not null, 'πρόσφατος πελάτης έφυγε από τον AE';
 end $$;
 
+-- 18. Πρόσωπα: όνομα/θέση χωρίς email, επεξεργασία, διαγραφή· πωλητής δεν πειράζει πρόσωπα πελάτη άλλου
+reset role;
+insert into customers (id, display_name, owner_id, status) values ('80000000-0000-0000-0000-000000000001','ΤΕΣΤ ΠΡΟΣΩΠΑ','00000000-0000-0000-0000-000000000001','active');
+select as_user(1);
+insert into contacts (customer_id, name, title, roles, mobile) values ('80000000-0000-0000-0000-000000000001','Γιώργος','Ιδιοκτήτης','{owner,decision}','6900000000');
+insert into contacts (customer_id, name, title, email, roles) values ('80000000-0000-0000-0000-000000000001','Λογιστήριο','Λογιστήριο','acc@test.gr','{billing}');
+update contacts set title = 'Ιδιοκτήτης & CEO' where name = 'Γιώργος';
+select as_user(3);
+do $$ begin
+  assert (select count(*) from contacts where customer_id = '80000000-0000-0000-0000-000000000001') = 0, 'πωλητής βλέπει πρόσωπα πελάτη άλλου';
+end $$;
+select as_user(1);
+delete from contacts where name = 'Λογιστήριο';
+do $$ begin
+  assert (select count(*) from contacts where customer_id = '80000000-0000-0000-0000-000000000001') = 1, 'δεν διαγράφηκε το πρόσωπο';
+  assert (select version from contacts where name = 'Γιώργος') = 2, 'δεν ανέβηκε η έκδοση';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

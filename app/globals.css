@@ -308,3 +308,10 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 .badge.faint { background: #f6f5f8; color: #8a8492; border: 1px solid #ebe8ef; }
 .show-m { display: none; }
 @media (max-width: 860px) { .show-m { display: block; font-size: 12px; } }
+/* Πρόσωπα / στοιχεία πελάτη */
+.cust-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+.people { display: flex; flex-direction: column; gap: 10px; }
+.person { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.person.dnc { opacity: .7; }
+.person-head { display: flex; gap: 10px; align-items: center; }
+.person-links { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 13.5px; }
