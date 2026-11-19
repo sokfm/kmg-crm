@@ -1,7 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { Flash } from "@/components/Flash";
 import { SubmitButton } from "@/components/SubmitButton";
-import { disconnectOutlook, syncMailNow } from "../actions";
+import { disconnectOutlook, setPassword, syncMailNow } from "../actions";
 
 export const maxDuration = 300;
 
@@ -27,6 +27,19 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           Καταγράφηκαν {nLogged} email σε καρτέλες · {nLeads} νέα leads · {nReview} προς έλεγχο · {nTasks} εργασίες.
         </div>
       )}
+
+      <form action={setPassword} className="card stack">
+        <h2 style={{ margin: 0 }}>Κωδικός για το κινητό</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          Βάλε έναν κωδικό και στο κινητό μπαίνεις με email + κωδικό, χωρίς σύνδεσμο στο email. Μετά την πρώτη φορά το κινητό σε θυμάται.
+          Τουλάχιστον 10 χαρακτήρες· μην τον χρησιμοποιείς αλλού και μην τον στέλνεις σε κανέναν.
+        </p>
+        <div className="grid2">
+          <label>Νέος κωδικός<input name="password" type="password" autoComplete="new-password" minLength={10} required /></label>
+          <label>Ξανά ο ίδιος<input name="password2" type="password" autoComplete="new-password" minLength={10} required /></label>
+        </div>
+        <div><SubmitButton pending="Αποθήκευση…">Αποθήκευση κωδικού</SubmitButton></div>
+      </form>
 
       <div className="card stack" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <h2>Σύνδεση Outlook</h2>

@@ -511,3 +511,15 @@ export async function decideWeb(f: FormData) {
   if (error) back(to, { error: friendly(error.message) });
   back(to, { ok: s(f, "closed") === "1" ? "webclosed" : "webkept" });
 }
+
+// Κωδικός για είσοδο από κινητό (χωρίς σύνδεσμο στο email)
+export async function setPassword(f: FormData) {
+  const { supabase } = await requireProfile();
+  const p1 = String(f.get("password") ?? "");
+  const p2 = String(f.get("password2") ?? "");
+  if (p1.length < 10) back("/settings", { error: "Ο κωδικός θέλει τουλάχιστον 10 χαρακτήρες" });
+  if (p1 !== p2) back("/settings", { error: "Οι δύο κωδικοί δεν είναι ίδιοι" });
+  const { error } = await supabase.auth.updateUser({ password: p1 });
+  if (error) back("/settings", { error: /reauth|recent/i.test(error.message) ? "Για ασφάλεια, βγες και ξαναμπές με email και ξαναδοκίμασε" : /same|different/i.test(error.message) ? "Είναι ίδιος με τον προηγούμενο" : /weak|pwned|leaked/i.test(error.message) ? "Πολύ εύκολος κωδικός· βάλε πιο δύσκολο" : friendly(error.message) });
+  back("/settings", { ok: "password" });
+}
