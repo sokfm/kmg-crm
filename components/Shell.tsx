@@ -93,6 +93,7 @@ export function Shell({ name, role, isAdmin, counts, children }: Props) {
           {!!counts.review && item("/inbox", "Προς έλεγχο", I.inbox, counts.review, true)}
           {isAdmin && item("/merges", "Merge", I.merge)}
           {item("/notifications", "Notifications", I.bell, counts.notifications, true)}
+          {item("/settings", "Ρυθμίσεις", I.gear)}
         </nav>
         <Link href="/leads/new" className="side-new"><Icon d={I.plus} size={16} /><span className="nav-label">Νέο lead</span></Link>
         <div className="side-user">
