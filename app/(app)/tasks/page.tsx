@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { today } from "@/lib/format";
 import { Flash } from "@/components/Flash";
+import { assignees } from "@/lib/assignees";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
 export default async function Tasks({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -17,9 +18,7 @@ export default async function Tasks({ searchParams }: { searchParams: Promise<Re
   const t = today();
   const late = rows.filter((r) => r.status === "open" && r.due_date && r.due_date < t);
   const rest = rows.filter((r) => !late.includes(r));
-  const { data: people } = isAdmin
-    ? await supabase.from("profiles").select("id, full_name").in("role", ["ceo", "sales_manager", "account_exec"]).eq("active", true).neq("id", profile.id)
-    : { data: [] as { id: string; full_name: string }[] };
+  const people = await assignees(supabase, isAdmin, profile.id);
 
   const tab = (k: string, label: string) => (
     <Link href={`/tasks?view=${k}`} className={`badge ${view === k ? "" : "gray"}`}>{label}</Link>
@@ -31,7 +30,7 @@ export default async function Tasks({ searchParams }: { searchParams: Promise<Re
       <h1>Εργασίες</h1>
       <p className="muted">Μόνο για πωλήσεις. Programming, social και τα υπόλοιπα μένουν στο Asana.</p>
       <Flash sp={sp} />
-      <div className="card"><NewTaskForm back={back} people={people ?? []} /></div>
+      <div className="card"><NewTaskForm back={back} people={people} /></div>
       <div className="row">
         {tab("mine", "Δικές μου")}
         {isAdmin && tab("all", "Όλης της ομάδας")}

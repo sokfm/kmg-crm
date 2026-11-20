@@ -7,6 +7,7 @@ import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr, customerState, aeLabe
 import { addActivity, decideWeb, leaveGroupAction, makeGroupAction, renameCustomer, setGroupAction, updateCustomerInfo, webLookup } from "../../actions";
 import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
 import { Flash } from "@/components/Flash";
+import { assignees } from "@/lib/assignees";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
 // Χρόνος για το ψάξιμο της AI στο ίντερνετ
@@ -18,7 +19,7 @@ export default async function CustomerPage({
   const { id } = await params;
   const sp = await searchParams;
   const tab = ["activity", "history"].includes(sp.tab) ? sp.tab : "info";
-  const { supabase, isAdmin } = await requireProfile();
+  const { supabase, isAdmin, profile } = await requireProfile();
   const { data: c } = await supabase
     .from("customers")
     .select("*, profiles!customers_owner_id_fkey(full_name), parent:parent_id(id, display_name)")
@@ -252,7 +253,7 @@ export default async function CustomerPage({
       <div className="card">
         <h2>Εργασίες</h2>
         <TaskList tasks={openTasks} back={`/customers/${c.id}`} showTarget={false} showOwner />
-        <div style={{ marginTop: 10 }}><NewTaskForm back={`/customers/${c.id}`} customerId={c.id} /></div>
+        <div style={{ marginTop: 10 }}><NewTaskForm back={`/customers/${c.id}`} customerId={c.id} people={await assignees(supabase, isAdmin, profile.id)} /></div>
       </div>
 
       <div className="card">

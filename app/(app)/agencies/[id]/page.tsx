@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, dateGr, eur, periodGr, customerState } from "@/lib/format";
 import { addActivity, updateAgencyDomains } from "../../actions";
 import { Flash } from "@/components/Flash";
+import { assignees } from "@/lib/assignees";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 
 export default async function AgencyPage({
@@ -12,7 +13,7 @@ export default async function AgencyPage({
 }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase, isAdmin } = await requireProfile();
+  const { supabase, isAdmin, profile } = await requireProfile();
   const { data: a } = await supabase.from("agencies").select("id, name, domains").eq("id", id).maybeSingle();
   if (!a) notFound();
 
@@ -50,7 +51,7 @@ export default async function AgencyPage({
       <div className="card">
         <h2>Εργασίες</h2>
         <TaskList tasks={tasks} back={`/agencies/${a.id}`} showTarget={false} showOwner />
-        <div style={{ marginTop: 10 }}><NewTaskForm back={`/agencies/${a.id}`} agencyId={a.id} /></div>
+        <div style={{ marginTop: 10 }}><NewTaskForm back={`/agencies/${a.id}`} agencyId={a.id} people={await assignees(supabase, isAdmin, profile.id)} /></div>
       </div>
 
       <div className="card">

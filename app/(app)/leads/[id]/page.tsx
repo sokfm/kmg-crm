@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, LOST_KINDS, STAGES, dateGr, eur, periodGr, today } from "@/lib/format";
 import { addActivity, updateLead, webLookup } from "../../actions";
 import { Flash } from "@/components/Flash";
+import { assignees } from "@/lib/assignees";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
 import { StagePath } from "@/components/MoveDialog";
 import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
@@ -28,7 +29,7 @@ export default async function LeadPage({
   const { id } = await params;
   const sp = await searchParams;
   const tab = sp.tab === "details" ? "details" : "activity";
-  const { supabase, isAdmin } = await requireProfile();
+  const { supabase, isAdmin, profile } = await requireProfile();
   const { data: lead } = await supabase
     .from("leads")
     .select("*, owner:profiles!leads_owner_id_fkey(full_name), creator:profiles!leads_created_by_fkey(full_name), customers(display_name)")
@@ -272,7 +273,7 @@ export default async function LeadPage({
         <aside className="sf-side">
           <div className="card">
             <h2>Εργασίες ({openTasks.length})</h2>
-            <NewTaskForm back={`/leads/${lead.id}`} leadId={lead.id} />
+            <NewTaskForm back={`/leads/${lead.id}`} leadId={lead.id} people={await assignees(supabase, isAdmin, profile.id)} />
           </div>
           <div className="card stack">
             <h2 style={{ margin: 0 }}>Προτάσεις ({props.length})</h2>

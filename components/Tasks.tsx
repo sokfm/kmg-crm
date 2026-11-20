@@ -76,9 +76,9 @@ export function NewTaskForm({
       <input name="title" className="grow" placeholder="Νέα εργασία, π.χ. Αποστολή πρότασης" required />
       <input name="due_date" type="date" defaultValue={in2} />
       {people && people.length > 0 && (
-        <select name="owner_id" defaultValue="">
-          <option value="">Σε μένα</option>
-          {people.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        <select name="owner_id" defaultValue="" aria-label="Ανάθεση σε">
+          <option value="">Για μένα</option>
+          {people.map((p) => <option key={p.id} value={p.id}>Για: {p.full_name}</option>)}
         </select>
       )}
       <SubmitButton>Προσθήκη</SubmitButton>
