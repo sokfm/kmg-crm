@@ -1,16 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { graph, refreshAccess, type GraphMessage } from "./microsoft";
 import { judgeEmail, type EmailVerdict } from "./ai";
-import { enrichLead } from "../enrich";
 import { isOwnEmail } from "../own";
 
 // Συγχρονισμός ενός γραμματοκιβωτίου: διαβάζει τα νέα Εισερχόμενα και Απεσταλμένα,
-// γράφει τα email γνωστών πελατών/leads στην καρτέλα τους, φτιάχνει leads όταν η AI
-// είναι σίγουρη, βάζει τα αβέβαια στη λίστα «Προς έλεγχο» και δημιουργεί εργασίες.
+// γράφει τα email γνωστών πελατών/leads στην καρτέλα τους και βάζει ό,τι αφορά πωλήσεις στη λίστα «Προς έλεγχο».
+// ΔΕΝ ανοίγει leads, εργασίες ή επόμενα βήματα μόνο του (απόφαση 20/11/2026): τα προτείνει και ο κάτοχος πατάει ΟΚ.
+// Το ίδιο email σε δύο γραμματοκιβώτια μετράει μία φορά· αν είναι για έλεγχο, πάει στον Νίκο.
 
 const INTERNAL_DOMAINS = ["sokfm.gr"];
 const ROBOT = /(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?@|bounce|newsletter@)/i;
-const LEAD_THRESHOLD = 0.85;
 const PER_FOLDER = 20;
 
 type Account = { user_id: string; ms_email: string; refresh_token: string; inbox_since: string; sent_since: string };
@@ -22,6 +21,7 @@ const lower = (s?: string | null) => (s ?? "").trim().toLowerCase();
 const domainOf = (email: string) => email.slice(email.indexOf("@"));
 const likeExact = (s: string) => s.replace(/[\\%_]/g, (c) => "\\" + c);
 const plusDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+const isDate = (d?: string | null) => /^\d{4}-\d{2}-\d{2}$/.test(d ?? "");
 
 export async function syncAccount(db: SupabaseClient, acc: Account): Promise<SyncResult> {
   const result: SyncResult = { user: acc.ms_email, logged: 0, leads: 0, review: 0, tasks: 0, skipped: 0 };
@@ -35,6 +35,8 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
     const agencyByDomain = new Map<string, { id: string; name: string }>();
     for (const a of ((await db.from("agencies").select("id, name, domains")).data ?? []) as { id: string; name: string; domains: string[] }[])
       for (const d of a.domains ?? []) agencyByDomain.set(lower(d), { id: a.id, name: a.name });
+    const ceoIds = new Set(((await db.from("profiles").select("id").eq("role", "ceo").eq("active", true)).data ?? []).map((c) => c.id as string));
+    const iAmCeo = ceoIds.has(acc.user_id);
     const own = lower(acc.ms_email);
     const internal = new Set([...INTERNAL_DOMAINS.map((d) => "@" + d), domainOf(own)]);
 
@@ -44,7 +46,7 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
       const since = isIn ? acc.inbox_since : acc.sent_since;
       const path =
         `/me/mailFolders/${folder}/messages?$top=${PER_FOLDER}` +
-        `&$select=id,subject,from,toRecipients,ccRecipients,${field},body,bodyPreview,webLink,isDraft` +
+        `&$select=id,subject,from,toRecipients,ccRecipients,${field},body,bodyPreview,webLink,isDraft,internetMessageId` +
         `&$filter=${field} gt ${new Date(since).toISOString()}&$orderby=${field} asc`;
       const { value } = await graph<{ value: GraphMessage[] }>(tok.access_token, path);
       let newest = since;
@@ -69,6 +71,21 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
         }
         const { data: seen } = await db.from("email_messages").select("id").eq("user_id", acc.user_id).eq("graph_id", m.id).maybeSingle();
         if (seen) continue;
+
+        // Το ίδιο email υπάρχει ήδη από άλλο γραμματοκιβώτιο (κοινό inbox, cc): μετράει μία φορά, χωρίς δεύτερη AI.
+        // Αν περιμένει έλεγχο σε άλλον και τώρα το βλέπει και ο Νίκος, περνάει στον Νίκο.
+        if (m.internetMessageId) {
+          const { data: twin } = await db.from("email_messages").select("id, user_id, status, ai_company, counterpart_email")
+            .eq("internet_id", m.internetMessageId).neq("user_id", acc.user_id).limit(1).maybeSingle();
+          if (twin) {
+            if (twin.status === "review" && iAmCeo && !ceoIds.has(twin.user_id)) {
+              await db.from("email_messages").update({ user_id: acc.user_id, graph_id: m.id, web_link: m.webLink ?? null }).eq("id", twin.id);
+              await db.from("notifications").insert({ user_id: acc.user_id, kind: "inbox_new", title: `Για το ΟΚ σου (ήρθε σε πάνω από ένα email): ${twin.ai_company ?? twin.counterpart_email}`, link: "/inbox" });
+            }
+            result.skipped++;
+            continue;
+          }
+        }
 
         // Δική μας διεύθυνση (φόρμα του site, προώθηση): ο αποστολέας ΔΕΝ είναι ο πελάτης.
         // Τα στοιχεία του πελάτη τα βρίσκει η AI μέσα στο κείμενο.
@@ -101,6 +118,7 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
             summary: (m.bodyPreview ?? "").slice(0, 200),
             reason: `Η AI δεν απάντησε (${e instanceof Error ? e.message.slice(0, 80) : "σφάλμα"}) — έλεγξέ το εσύ.`,
             tasks: [],
+            next_step: null,
           };
         }
 
@@ -112,6 +130,10 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
         const base = {
           user_id: acc.user_id,
           graph_id: m.id,
+          internet_id: m.internetMessageId ?? null,
+          ai_tasks: verdict.tasks.map((t) => ({ title: t.title, due_date: isDate(t.due_date) ? t.due_date : null })),
+          ai_next_step: verdict.next_step?.text ?? null,
+          ai_next_due: isDate(verdict.next_step?.due_date) ? verdict.next_step!.due_date : null,
           direction: isIn ? "in" : "out",
           counterpart_email: other.email,
           counterpart_name: other.name,
@@ -128,61 +150,33 @@ export async function syncAccount(db: SupabaseClient, acc: Account): Promise<Syn
           ai_email: realEmail,
         };
 
-        // 1. Γνωστός πελάτης ή lead → στην καρτέλα του
+        // 1. Γνωστός πελάτης ή lead → η επαφή γράφεται στην καρτέλα του· εργασίες/επόμενο βήμα μένουν ΠΡΟΤΑΣΕΙΣ για ΟΚ
         if (match) {
+          const hasIdeas = verdict.tasks.length > 0 || (!!match.lead_id && !!verdict.next_step);
           const { data: em } = await db
             .from("email_messages")
-            .insert({ ...base, status: "logged", customer_id: match.customer_id, lead_id: match.lead_id, agency_id: match.agency_id ?? null, decided_at: new Date().toISOString() })
+            .insert({ ...base, status: "logged", suggest: hasIdeas ? "pending" : "none", customer_id: match.customer_id, lead_id: match.lead_id, agency_id: match.agency_id ?? null, decided_at: new Date().toISOString() })
             .select("id")
             .single();
           await logActivity(db, acc.user_id, em!.id, isIn, base.subject, verdict.summary, when, match);
-          result.tasks += await makeTasks(db, acc.user_id, em!.id, verdict, match);
+          if (hasIdeas) result.tasks += verdict.tasks.length;
           result.logged++;
           continue;
         }
 
-        // 2. Σίγουρο νέο lead (μόνο από εισερχόμενα) → νέο lead + ειδοποίηση
-        if (isIn && verdict.kind === "new_lead" && verdict.confidence >= LEAD_THRESHOLD) {
-          const company = verdict.company || (ownSender ? realName || realEmail || base.subject : other.name || other.email);
-          const { data: lead, error } = await db
-            .from("leads")
-            .insert({
-              company_name: company,
-              contact_name: realName,
-              email: realEmail,
-              phone: verdict.phone,
-              source: "email",
-              next_step: "Πρώτη επαφή (lead από email)",
-              next_step_due: plusDays(1),
-              notes: `Από email: «${base.subject}» — ${verdict.summary}`,
-              created_by: acc.user_id,
-            })
-            .select("id")
-            .single();
-          if (!error && lead) {
-            const target = { customer_id: null, lead_id: lead.id, label: company };
-            if (realEmail) await db.from("contacts").insert({ email: realEmail, name: realName, lead_id: lead.id, created_by: acc.user_id });
-            const { data: em } = await db
-              .from("email_messages")
-              .insert({ ...base, status: "lead_created", lead_id: lead.id, decided_at: new Date().toISOString() })
-              .select("id")
-              .single();
-            await logActivity(db, acc.user_id, em!.id, isIn, base.subject, verdict.summary, when, target);
-            result.tasks += await makeTasks(db, acc.user_id, em!.id, verdict, target);
-            const { data: ceos } = await db.from("profiles").select("id").eq("role", "ceo").eq("active", true);
-            const notify = new Set([acc.user_id, ...(ceos ?? []).map((c) => c.id)]);
-            await db.from("notifications").insert(
-              [...notify].map((uid) => ({ user_id: uid, kind: "lead_from_email", title: `Νέο lead από email: ${company}`, link: `/leads/${lead.id}` })),
-            );
-            result.leads++;
-            try { await enrichLead(db, lead.id); } catch { /* δεν σταματάμε τον συγχρονισμό */ }
-            continue;
-          }
-        }
-
-        // 3. Αβέβαιο αλλά σχετικό με πωλήσεις → «Προς έλεγχο»
+        // 2. Σχετικό με πωλήσεις αλλά άγνωστος αποστολέας → «Προς έλεγχο». Lead γίνεται μόνο με ΟΚ.
         if (["new_lead", "existing_customer", "agency"].includes(verdict.kind)) {
-          await db.from("email_messages").insert({ ...base, status: "review" });
+          let hint: { id: string; label: string } | null = null;
+          if (verdict.kind === "new_lead" && (verdict.company || verdict.phone)) {
+            const { data: like } = await db.rpc("find_lead_like", { p_company: verdict.company, p_phone: verdict.phone });
+            hint = ((like ?? []) as { id: string; label: string }[])[0] ?? null;
+          }
+          await db.from("email_messages").insert({ ...base, status: "review", lead_hint: hint?.id ?? null, lead_hint_label: hint?.label ?? null });
+          if (isIn && verdict.kind === "new_lead") {
+            const who = verdict.company || (ownSender ? realName || realEmail || base.subject : other.name || other.email);
+            await db.from("notifications").insert({ user_id: acc.user_id, kind: "inbox_new", title: `Πιθανό νέο lead από email: ${who} — θέλει το ΟΚ σου`, link: "/inbox" });
+            result.leads++;
+          }
           result.review++;
           continue;
         }
@@ -237,30 +231,6 @@ export async function logActivity(
     occurred_at: when,
     email_message_id: emailId,
   });
-}
-
-async function makeTasks(
-  db: SupabaseClient,
-  userId: string,
-  emailId: string,
-  verdict: { tasks: { title: string; due_date: string | null }[] },
-  target: Target,
-) {
-  if (!verdict.tasks.length) return 0;
-  await db.from("tasks").insert(
-    verdict.tasks.map((t) => ({
-      title: t.title,
-      due_date: /^\d{4}-\d{2}-\d{2}$/.test(t.due_date ?? "") ? t.due_date : plusDays(2),
-      owner_id: userId,
-      created_by: userId,
-      customer_id: target.customer_id,
-      lead_id: target.lead_id,
-      agency_id: target.agency_id ?? null,
-      email_message_id: emailId,
-      source: "email",
-    })),
-  );
-  return verdict.tasks.length;
 }
 
 export async function syncAll(db: SupabaseClient, userId?: string) {

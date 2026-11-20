@@ -13,6 +13,7 @@ export async function GET(request: Request) {
   }
   const admin = supabaseAdmin();
   const { data: made, error } = await admin.rpc("make_reminders");
+  const { data: waiting } = await admin.rpc("make_inbox_reminders");
   const sent = await flushNotifications(admin);
-  return NextResponse.json({ reminders: made ?? 0, error: error?.message ?? null, ...sent });
+  return NextResponse.json({ reminders: made ?? 0, inbox: waiting ?? 0, error: error?.message ?? null, ...sent });
 }

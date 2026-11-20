@@ -366,6 +366,8 @@ export async function completeTask(f: FormData) {
   back(backTo, { ok: done ? "taskdone" : "1" });
 }
 
+const plusDay = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
 // ---------- Email «Προς έλεγχο» ----------
 
 async function loadReviewEmail(id: string) {
@@ -408,6 +410,15 @@ export async function reviewAsLead(f: FormData) {
     occurred_at: em.occurred_at,
     email_message_id: em.id,
   });
+  // Εργασίες που πρότεινε η AI και τσέκαρε ο χρήστης
+  const ideas = (Array.isArray(em.ai_tasks) ? em.ai_tasks : []) as { title: string; due_date: string | null }[];
+  const picked = f.getAll("task").map((v) => ideas[Number(v)]).filter(Boolean);
+  if (picked.length) {
+    await supabase.from("tasks").insert(picked.map((t) => ({
+      title: t.title, due_date: t.due_date ?? plusDay(2), owner_id: profile.id, created_by: profile.id,
+      lead_id: lead!.id, email_message_id: em.id, source: "email",
+    })));
+  }
   revalidatePath("/inbox");
   const newId = lead!.id;
   after(async () => {
@@ -418,6 +429,50 @@ export async function reviewAsLead(f: FormData) {
     } catch { /* μένει το κουμπί «Ψάξε στο ίντερνετ» */ }
   });
   redirect(`/leads/${newId}?ok=created`);
+}
+
+// «Είναι το ίδιο»: το email μπαίνει στο lead που υπάρχει ήδη, δεν ανοίγει δεύτερο
+export async function reviewAsSameLead(f: FormData) {
+  const { supabase } = await requireProfile();
+  const { error } = await supabase.rpc("link_email_to_hint", { p_email: s(f, "id") });
+  revalidatePath("/inbox");
+  if (error) back("/inbox", { error: friendly(error.message) });
+  back("/inbox", { ok: "samelead" });
+}
+
+// Προτάσεις της AI από email γνωστού πελάτη/lead: γράφονται μόνο όσες τσεκάρει ο χρήστης
+export async function applySuggestions(f: FormData) {
+  const { supabase, profile, em } = await loadReviewEmail(s(f, "id")!);
+  if (em.suggest !== "pending") back("/inbox", { error: "Έχει ήδη απαντηθεί" });
+  if (s(f, "mode") === "no") {
+    await supabase.from("email_messages").update({ suggest: "dismissed" }).eq("id", em.id);
+    revalidatePath("/inbox");
+    back("/inbox", { ok: "ignored" });
+  }
+  const ideas = (Array.isArray(em.ai_tasks) ? em.ai_tasks : []) as { title: string; due_date: string | null }[];
+  const picked = f.getAll("task").map((v) => ideas[Number(v)]).filter(Boolean);
+  if (picked.length) {
+    const { error } = await supabase.from("tasks").insert(picked.map((t) => ({
+      title: t.title, due_date: t.due_date ?? plusDay(2), owner_id: profile.id, created_by: profile.id,
+      customer_id: em.lead_id ? null : em.customer_id, lead_id: em.lead_id, agency_id: em.agency_id, email_message_id: em.id, source: "email",
+    })));
+    if (error) back("/inbox", { error: friendly(error.message) });
+  }
+  let stepNote = "";
+  if (s(f, "use_step") && em.lead_id && s(f, "next_step")) {
+    const { data: lead } = await supabase.from("leads").select("id, version, status").eq("id", em.lead_id).maybeSingle();
+    if (!lead || ["won", "lost"].includes(lead.status)) stepNote = "stepskip";
+    else {
+      const { data: done } = await supabase.from("leads")
+        .update({ next_step: s(f, "next_step"), next_step_due: s(f, "next_step_due") ?? plusDay(2) })
+        .eq("id", lead.id).eq("version", lead.version).select("id");
+      if (!done?.length) stepNote = "stepskip";
+    }
+  }
+  await supabase.from("email_messages").update({ suggest: "done" }).eq("id", em.id);
+  revalidatePath("/inbox");
+  revalidatePath("/today");
+  back("/inbox", { ok: stepNote || "suggested" });
 }
 
 export async function reviewAsCustomer(f: FormData) {

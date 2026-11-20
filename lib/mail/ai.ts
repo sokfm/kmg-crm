@@ -11,6 +11,7 @@ export type EmailVerdict = {
   summary: string;
   reason: string;
   tasks: { title: string; due_date: string | null }[];
+  next_step: { text: string; due_date: string | null } | null;
 };
 
 const SYSTEM = `Είσαι ο βοηθός πωλήσεων της Kartelias Media Group (KMG), ραδιοφωνικού ομίλου στη Χαλκίδα
@@ -41,7 +42,10 @@ confidence: πόσο σίγουρος είσαι για το kind. Για new_le
 tasks: μόνο υποχρεώσεις ΠΩΛΗΣΕΩΝ που προκύπτουν για την KMG (π.χ. «Αποστολή πρότασης στον Χ»,
 «Κλήση για ραντεβού», «Αποστολή τιμολογίου»). Όχι εργασίες για programming, social ή εσωτερικά — αυτά
 πάνε αλλού. Όχι εργασίες για προγραμματισμό σποτ/traffic από πρακτορεία (τα χειρίζεται το traffic).
-Αν δεν προκύπτει τίποτα, κενή λίστα. Ημερομηνίες μόνο αν αναφέρονται ή εννοούνται καθαρά.`;
+Αν δεν προκύπτει τίποτα, κενή λίστα. Ημερομηνίες μόνο αν αναφέρονται ή εννοούνται καθαρά.
+
+next_step: το ΕΝΑ επόμενο βήμα πώλησης που προκύπτει από το email, σύντομα (π.χ. «Αποστολή πρότασης», «Κλείσιμο ραντεβού»,
+«Follow-up στην προσφορά»), με due_date αν φαίνεται. null αν δεν προκύπτει κάτι καθαρό. Είναι ΠΡΟΤΑΣΗ: ο άνθρωπος θα πατήσει ΟΚ.`;
 
 export async function judgeEmail(input: {
   direction: "in" | "out";
@@ -86,6 +90,7 @@ export async function judgeEmail(input: {
   if (!block?.input) throw new Error("AI: κενή απάντηση");
   const v = block.input as EmailVerdict;
   v.tasks = Array.isArray(v.tasks) ? v.tasks.filter((t) => t && t.title).slice(0, 3) : [];
+  v.next_step = v.next_step && typeof v.next_step.text === "string" && v.next_step.text.trim() ? { text: v.next_step.text.trim().slice(0, 160), due_date: v.next_step.due_date ?? null } : null;
   v.confidence = Number(v.confidence) || 0;
   v.email = typeof v.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email.trim()) ? v.email.trim().toLowerCase() : null;
   v.summary = v.summary ?? "";
@@ -107,6 +112,7 @@ const VERDICT_TOOL = {
       email: { type: ["string", "null"] },
       summary: { type: "string" },
       reason: { type: "string" },
+      next_step: { type: ["object", "null"], properties: { text: { type: "string" }, due_date: { type: ["string", "null"] } }, required: ["text"] },
       tasks: {
         type: "array",
         items: { type: "object", properties: { title: { type: "string" }, due_date: { type: ["string", "null"] } }, required: ["title"] },

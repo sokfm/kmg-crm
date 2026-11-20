@@ -772,4 +772,44 @@ do $$ declare a text; b text; pc text; begin
 end $$;
 reset role;
 
+-- 40. Email: τίποτα δεν ανοίγει μόνο του. Έλεγχος «υπάρχει ήδη lead», «είναι το ίδιο», υπενθύμιση 24 ωρών
+select as_user(1);
+insert into leads (id, company_name, phone, owner_id, next_step, next_step_due) values ('da000000-0000-0000-0000-000000000001','Καφέ Ωραίο','22210 12345','00000000-0000-0000-0000-000000000003','x', current_date + 1);
+reset role;
+do $$ declare r record; begin
+  select * into r from find_lead_like('ΚΑΦΕ ΩΡΑΙΟ', null);
+  assert r.id = 'da000000-0000-0000-0000-000000000001', 'δεν βρήκε το lead από το όνομα (χωρίς τόνους/κεφαλαία)';
+  assert r.label like 'Καφέ Ωραίο · ανοιχτό · %', 'λάθος ετικέτα: ' || r.label;
+  select * into r from find_lead_like('Άσχετο όνομα', '+30 2221012345');
+  assert r.id = 'da000000-0000-0000-0000-000000000001', 'δεν βρήκε το lead από το τηλέφωνο';
+  select * into r from find_lead_like('Κάτι εντελώς άλλο', '6900000000');
+  assert r.id is null, 'βρήκε lead που δεν υπάρχει';
+end $$;
+insert into email_messages (id, user_id, graph_id, internet_id, direction, counterpart_email, subject, occurred_at, status, summary, lead_hint, lead_hint_label, created_at) values
+ ('ea000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000004','g-40-1','<m40@x>','in','owner@kafe.gr','Τιμές για σποτ', now(), 'review','Ζητά τιμές','da000000-0000-0000-0000-000000000001','Καφέ Ωραίο · ανοιχτό · Κώστας', now() - interval '30 hours'),
+ ('ea000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000004','g-40-2','<m41@x>','in','b@b.gr','Νέο', now(), 'review','Κάτι', null, null, now());
+select as_user(3);
+do $$ begin
+  begin perform link_email_to_hint('ea000000-0000-0000-0000-000000000001'); raise exception 'NOPE';
+  exception when others then if sqlerrm = 'NOPE' then raise exception 'άλλος χρήστης έδεσε ξένο email'; end if; end;
+end $$;
+select as_user(4);
+do $$ begin
+  perform link_email_to_hint('ea000000-0000-0000-0000-000000000001');
+  begin perform link_email_to_hint('ea000000-0000-0000-0000-000000000002'); raise exception 'NOPE';
+  exception when others then if sqlerrm = 'NOPE' then raise exception 'έδεσε email χωρίς lead'; end if; end;
+end $$;
+reset role;
+do $$ declare n int; begin
+  assert (select status = 'logged' and lead_id = 'da000000-0000-0000-0000-000000000001' from email_messages where id = 'ea000000-0000-0000-0000-000000000001'), 'το email δεν δέθηκε στο lead';
+  assert (select count(*) from activities where email_message_id = 'ea000000-0000-0000-0000-000000000001' and lead_id = 'da000000-0000-0000-0000-000000000001') = 1, 'δεν γράφτηκε η επαφή';
+  assert (select count(*) from leads where company_name ilike 'καφέ ωραίο') = 1, 'άνοιξε δεύτερο lead';
+  update email_messages set created_at = now() - interval '30 hours' where id = 'ea000000-0000-0000-0000-000000000002';
+  n := make_inbox_reminders();
+  if extract(hour from now() at time zone 'Europe/Athens') between 9 and 19 then
+    assert n = 1, 'περίμενα 1 υπενθύμιση για το «Προς έλεγχο», βγήκαν ' || n;
+    assert make_inbox_reminders() = 0, 'η υπενθύμιση βγήκε δεύτερη φορά';
+  end if;
+end $$;
+
 select 'ALL TESTS PASSED' as result;

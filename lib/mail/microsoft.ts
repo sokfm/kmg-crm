@@ -65,4 +65,5 @@ export type GraphMessage = {
   body?: { content?: string };
   webLink?: string;
   isDraft?: boolean;
+  internetMessageId?: string;
 };
