@@ -583,4 +583,20 @@ do $$ begin
 end $$;
 reset role;
 
+-- 33. Κερδισμένο χωρίς επιβεβαιωμένη έναρξη → εργασία στον AE· κλείνει μόλις μπει η ημερομηνία
+select as_user(3);
+insert into proposals (id, lead_id, client_type, title) values ('e1000000-0000-0000-0000-000000000033','d0000000-0000-0000-0000-000000000001','local','Για κλείσιμο');
+insert into proposal_items (id, proposal_id, station, kind, title, monthly_amount, months, start_date) values ('e2000000-0000-0000-0000-000000000033','e1000000-0000-0000-0000-000000000033','NRG','package','Πακέτο',500,1,'2026-11-15');
+select set_main_proposal('e1000000-0000-0000-0000-000000000033');
+update leads set status = 'won' where id = 'd0000000-0000-0000-0000-000000000001';
+do $$ declare n int; begin
+  assert (select status from leads where id = 'd0000000-0000-0000-0000-000000000001') = 'won', 'το lead δεν έγινε κερδισμένο';
+  select count(*) into n from tasks where lead_id = 'd0000000-0000-0000-0000-000000000001' and source = 'confirm_start' and status = 'open' and owner_id = '00000000-0000-0000-0000-000000000003';
+  assert n = 1, 'δεν άνοιξε εργασία επιβεβαίωσης έναρξης: ' || n;
+  update proposal_items set confirmed_start = date '2026-11-25' where id = 'e2000000-0000-0000-0000-000000000033';
+  select count(*) into n from tasks where lead_id = 'd0000000-0000-0000-0000-000000000001' and source = 'confirm_start' and status = 'open';
+  assert n = 0, 'η εργασία δεν έκλεισε μόνη της';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

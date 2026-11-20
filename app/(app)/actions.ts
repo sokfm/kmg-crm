@@ -158,19 +158,20 @@ export async function moveLead(f: FormData) {
     patch.next_step_due = s(f, "next_step_due");
     patch.next_step_time = hhmm(f, "next_step_time");
   }
-  const { data, error } = await supabase.from("leads").update(patch).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
-  revalidatePath("/pipeline");
-  revalidatePath(`/leads/${id}`);
-  revalidatePath("/today");
-  if (error) back(to, { error: friendly(error.message) });
-  if (!data || data.length === 0) back(to, { conflict: "1" });
-  // Κερδισμένο με επιβεβαιωμένη έναρξη: γράφεται σε όλες τις γραμμές της κύριας πρότασης (από εκεί βγαίνει ο τζίρος ανά μήνα)
+  // Κερδισμένο με επιβεβαιωμένη έναρξη: γράφεται σε όλες τις γραμμές της κύριας πρότασης (από εκεί βγαίνει ο τζίρος ανά μήνα).
+  // Γράφεται ΠΡΙΝ κλείσει το lead: αν δεν δοθεί, η βάση ανοίγει μόνη της εργασία «Επιβεβαίωσε έναρξη με τον πελάτη».
   const cs = s(f, "confirmed_start");
   if (status === "won" && cs && /^\d{4}-\d{2}-\d{2}$/.test(cs)) {
     const { data: main } = await supabase.from("proposals").select("id").eq("lead_id", id).eq("is_main", true).maybeSingle();
     if (main) await supabase.from("proposal_items").update({ confirmed_start: cs }).eq("proposal_id", main.id);
     revalidatePath("/dashboard");
   }
+  const { data, error } = await supabase.from("leads").update(patch).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
+  revalidatePath("/pipeline");
+  revalidatePath(`/leads/${id}`);
+  revalidatePath("/today");
+  if (error) back(to, { error: friendly(error.message) });
+  if (!data || data.length === 0) back(to, { conflict: "1" });
   back(to, { ok: status === "won" ? "won" : "moved" });
 }
 
