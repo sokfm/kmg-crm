@@ -286,7 +286,8 @@ export default async function LeadPage({
                 <strong>{eur(p.total)}</strong>
               </Link>
             ))}
-            <div><Link href={`/leads/${lead.id}/proposal`} className="btn">{props.length ? "Νέα ή όλες οι προτάσεις" : "Νέα πρόταση"}</Link></div>
+            {props.length > 0 && <div className="muted" style={{ fontSize: 12.5 }}>Πάτα μια πρόταση για να την αλλάξεις ή να της προσθέσεις ραδιόφωνο.</div>}
+            <div><Link href={`/leads/${lead.id}/proposal`} className={props.length ? "btn secondary" : "btn"}>{props.length ? "Ξεχωριστή νέα πρόταση" : "Νέα πρόταση"}</Link></div>
           </div>
           <PeopleCard people={persons} leadId={lead.id} back={`/leads/${lead.id}`} canEdit />
           <div className="card sf-fields">

@@ -37,6 +37,8 @@ export default async function Proposals({
 
       {list.length > 0 && (
         <div className="card stack">
+          <h2 style={{ margin: 0 }}>Οι προτάσεις του πελάτη</h2>
+          <p className="muted" style={{ margin: 0 }}>Για να προσθέσεις ραδιόφωνο ή να αλλάξεις κάτι, άνοιξε την πρόταση. Δεν χρειάζεται καινούργια.</p>
           {list.map((p) => {
             const total = finals.get(p.id) ?? p.proposal_items.reduce((a, i) => a + itemTotal(i).total, 0);
             const stations = [...new Set(p.proposal_items.map((i) => i.station))];
@@ -46,16 +48,20 @@ export default async function Proposals({
                   <strong>{p.title}</strong> {p.is_main && <span className="badge good">Κύρια</span>} {p.req_status === "pending" && <span className="badge late">Αναμένει έγκριση</span>} {p.client_type && <span className="badge gray">{CLIENT_LABEL[p.client_type]}</span>}
                   <div className="muted" style={{ fontSize: 13 }}>{dateGr(p.created_at)} · {stations.length ? stations.join(" · ") : "άδεια"}</div>
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 800 }}>{eur(total)}</div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>{eur(total)}</div>
+                  <span className="btn secondary" style={{ padding: "5px 12px", fontSize: 13, marginTop: 4 }}>Άνοιγμα · αλλαγή · νέο μέσο →</span>
+                </div>
               </Link>
             );
           })}
         </div>
       )}
 
-      <form action={createProposal} className="card stack">
+      <details className="card" open={list.length === 0}>
+      <summary style={{ cursor: "pointer", fontWeight: 800, fontSize: 17 }}>{list.length ? "+ Ξεχωριστή νέα πρόταση (π.χ. ανανέωση ή εναλλακτική)" : "Νέα πρόταση"}</summary>
+      <form action={createProposal} className="stack" style={{ marginTop: 12 }}>
         <input type="hidden" name="lead_id" value={id} />
-        <h2 style={{ margin: 0 }}>Νέα πρόταση</h2>
         <label>Όνομα<input name="title" required maxLength={80} defaultValue={list.length ? "" : "Πρόταση"} placeholder="π.χ. Ανανέωση 2027, Πρόταση με DALKAS" /></label>
         <div className="muted">Τι πελάτης είναι; Ισχύει για όλα τα μέσα αυτής της πρότασης.{hasAgency ? " Η καρτέλα του έχει πρακτορείο." : ""}</div>
         {TYPES.map((t) => (
@@ -66,6 +72,7 @@ export default async function Proposals({
         ))}
         <div><SubmitButton pending="Δημιουργία…">Δημιουργία πρότασης</SubmitButton></div>
       </form>
+      </details>
     </main>
   );
 }
