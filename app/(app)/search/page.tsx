@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { STAGES, eur, periodGr, customerState } from "@/lib/format";
+import { STAGES, eur, periodGr, customerState, grNorm } from "@/lib/format";
+import { LiveSearch } from "@/components/LiveSearch";
 
 // Αναζήτηση παντού (Ctrl K): πελάτες, leads, media shops.
 export default async function Search({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -9,7 +10,7 @@ export default async function Search({ searchParams }: { searchParams: Promise<R
   const q = (sp.q ?? "").trim().replace(/[%,()]/g, "");
   const [c, l, a] = q
     ? await Promise.all([
-        supabase.from("customers").select("id, display_name, status, last_period, lifetime_revenue").ilike("display_name", `%${q}%`).order("lifetime_revenue", { ascending: false }).limit(15),
+        supabase.from("customers").select("id, display_name, status, last_period, lifetime_revenue").like("name_search", `%${grNorm(q)}%`).order("lifetime_revenue", { ascending: false }).limit(15),
         supabase.from("leads").select("id, company_name, status, contact_name").or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`).limit(15),
         supabase.from("agencies").select("id, name").ilike("name", `%${q}%`).limit(5),
       ])
@@ -21,7 +22,7 @@ export default async function Search({ searchParams }: { searchParams: Promise<R
     <main className="wrap" style={{ maxWidth: 760 }}>
       <h1>Αναζήτηση</h1>
       <form className="row">
-        <input name="q" defaultValue={q} placeholder="Όνομα πελάτη, lead, τηλέφωνο, email…" className="grow" autoFocus />
+        <LiveSearch value={q} placeholder="Όνομα πελάτη, lead, τηλέφωνο, email…" className="grow" autoFocus />
         <button type="submit">Αναζήτηση</button>
       </form>
       {none && <p className="muted">Δεν βρέθηκε τίποτα για «{q}».</p>}

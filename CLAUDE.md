@@ -30,6 +30,7 @@ CRM της Kartelias Media Group (ΣΟΚ FM, DALKAS, ΜΠΛΕ, NRG, lalala.gr). 
 - Lead «Ενδιαφέρεται για»: `interests` (radio, digital ή και τα δύο). `product_line` = digital μόνο όταν είναι σκέτο digital· η υπεύθυνη digital βλέπει και τα «και τα δύο».
 - Pipeline: κάθε Account Executive έχει δικό του χρώμα (`profiles.color`, ο Νίκος magenta)· η κάρτα γράφει πρώτα το μπάτζετ. Lead με Radio+Digital: ειδοποίηση και εργασία στον υπεύθυνο digital (trigger).
 - Οι δικές μας διευθύνσεις (@sokfm.gr, @karteliasmediagroup.gr, @lalala.gr — `lib/own.ts`, `is_own_email`) δεν γίνονται ποτέ στοιχεία πελάτη· σε φόρμα του site/προώθηση τα στοιχεία τα βγάζει η AI από το κείμενο.
+- Αναζήτηση (0034): ψάχνει όσο γράφεις (`components/LiveSearch.tsx`, 250 ms). Πελάτες: στήλη `customers.name_search` = `gr_norm(display_name)` (πεζά, χωρίς τόνους, ς→σ)· στον κώδικα η ίδια κανονικοποίηση `grNorm` (`lib/format.ts`).
 - Δεδομένα πελατών (data/, seed) και κλειδιά ΠΟΤΕ στο git.
 
 ## Outlook και Εργασίες (Κομμάτι Α2)

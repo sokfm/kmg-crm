@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
-import { CHANNEL, aeLabel, customerState, eur, monthsAgo, periodGr } from "@/lib/format";
+import { grNorm, CHANNEL, aeLabel, customerState, eur, monthsAgo, periodGr } from "@/lib/format";
+import { LiveSearch } from "@/components/LiveSearch";
 import { claimCustomer, decideClaim } from "../actions";
 import { Flash } from "@/components/Flash";
 
@@ -46,7 +47,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   else if (/^\d{4}-$/.test(year)) q = q.lte("last_period", `${year.slice(0, 4)}-12`); // «έως και»
   if (sp.owner && isAdmin) q = sp.owner === "none" ? q.is("owner_id", null) : q.eq("owner_id", sp.owner);
   if (sp.agency) q = q.eq("agency_id", sp.agency);
-  if (sp.q) q = q.ilike("display_name", `%${sp.q.replace(/[%,]/g, "")}%`);
+  if (sp.q) q = q.like("name_search", `%${grNorm(sp.q.replace(/[%_,()]/g, " ").trim())}%`);
   const { data, count } = await q;
   const rows = (data ?? []) as unknown as Row[];
 
@@ -100,7 +101,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
         <form className="row">
           <input type="hidden" name="status" value={status} />
           <input type="hidden" name="sort" value={sort} />
-          <input name="q" defaultValue={sp.q ?? ""} placeholder="Αναζήτηση πελάτη…" className="grow" style={{ minWidth: 180 }} />
+          <LiveSearch value={sp.q ?? ""} placeholder="Αναζήτηση πελάτη… (ψάχνει όσο γράφεις)" className="grow" style={{ minWidth: 180 }} />
           <label className="row" style={{ flexDirection: "row", gap: 6 }}>Τελευταία φορά έπαιξε
             <select name="year" defaultValue={year}>
               <option value="">όποτε</option>

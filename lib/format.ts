@@ -42,6 +42,11 @@ export const CHANNEL: Record<string, string> = {
   media_shop: "Media Shop",
 };
 
+// Ίδια κανονικοποίηση με τη gr_norm της βάσης: πεζά, χωρίς τόνους, τελικό σίγμα → σ
+export function grNorm(t: string) {
+  return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ς/g, "σ");
+}
+
 export function today() {
   return new Date().toISOString().slice(0, 10);
 }

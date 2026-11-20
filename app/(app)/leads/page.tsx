@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveSearch } from "@/components/LiveSearch";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { STAGES, dateGr, eur, today } from "@/lib/format";
@@ -73,7 +74,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<Re
               <select name="view" defaultValue={view} className="sf-view">
                 {Object.entries(VIEWS).filter(([k]) => isAdmin || k !== "unassigned").map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
-              <input name="q" defaultValue={sp.q ?? ""} placeholder="Αναζήτηση σε αυτή τη λίστα…" style={{ minWidth: 200 }} />
+              <LiveSearch value={sp.q ?? ""} placeholder="Αναζήτηση σε αυτή τη λίστα…" style={{ minWidth: 200 }} />
               <SubmitButton className="secondary">Εμφάνιση</SubmitButton>
             </form>
           </div>
