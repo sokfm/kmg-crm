@@ -11,6 +11,7 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const { supabase, isAdmin } = await requireProfile();
   if (!isAdmin) redirect("/customers");
+  const backTo = typeof sp.back === "string" && sp.back.startsWith("/customers") ? sp.back : "/customers";
   const raw = sp.ids ?? [];
   const ids = (Array.isArray(raw) ? raw : raw.split(",")).filter((x) => /^[0-9a-f-]{36}$/.test(x));
   const { data } = await supabase
@@ -26,7 +27,7 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
 
   return (
     <main className="wrap" style={{ maxWidth: 760 }}>
-      <Link href="/customers" className="muted">← Πελάτες</Link>
+      <Link href={backTo} className="muted">← Πελάτες</Link>
       <h1>Ένωση πελατών</h1>
       <Flash sp={flash} />
       {rows.length < 2 ? (
@@ -34,6 +35,7 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
       ) : (
         <form action={mergeCustomers} className="card stack">
           {rows.map((c) => <input key={c.id} type="hidden" name="ids" value={c.id} />)}
+          <input type="hidden" name="back" value={backTo} />
           <p style={{ margin: 0 }}>
             Αυτοί οι {rows.length} πελάτες θα γίνουν <strong>ένας</strong>. Όλο το ιστορικό τιμολόγησης, οι επαφές, τα leads, οι εργασίες και τα email
             μεταφέρονται στον ενωμένο πελάτη. <strong>Η ένωση δεν αναιρείται</strong>, οπότε έλεγξε ότι είναι πράγματι ο ίδιος.
@@ -60,7 +62,7 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
           </p>
           <div className="row">
             <SubmitButton pending="Ένωση…">Ένωσέ τους σε έναν</SubmitButton>
-            <Link href="/customers" className="btn secondary">Άκυρο</Link>
+            <Link href={backTo} className="btn secondary">Άκυρο</Link>
           </div>
         </form>
       )}

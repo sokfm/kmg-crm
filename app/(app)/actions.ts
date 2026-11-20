@@ -282,7 +282,12 @@ export async function mergeCustomers(f: FormData) {
   const ids = f.getAll("ids").map(String);
   const { data, error } = await supabase.rpc("merge_customers_manual", { p_ids: ids, p_keep: s(f, "keep_id"), p_name: s(f, "keep_name") });
   revalidatePath("/customers");
+  // Αν ήρθε από τη λίστα, γυρίζει ΣΤΗΝ ΙΔΙΑ θέση της λίστας (ίδια ταξινόμηση, σελίδα, φίλτρα) και δείχνει τον ενωμένο
+  const to = s(f, "back");
+  const list = to && to.startsWith("/customers") && !to.startsWith("/customers/") ? to : null;
+  if (error && list) redirect(`${list}${list.includes("?") ? "&" : "?"}error=${encodeURIComponent(friendly(error.message))}`);
   if (error) back("/customers/merge", { ids: ids.join(","), error: friendly(error.message) });
+  if (list) redirect(`${list}${list.includes("?") ? "&" : "?"}ok=mergedlist&hl=${data}#c-${data}`);
   redirect(`/customers/${data}?ok=merged`);
 }
 
@@ -639,6 +644,8 @@ export async function setGroupAction(f: FormData) {
   const { data, error } = await supabase.rpc("set_group", { p_ids: ids, p_group: s(f, "group_id"), p_new_name: s(f, "new_name") });
   revalidatePath("/customers");
   if (error) back(to, { error: friendly(error.message) });
+  const list = s(f, "list");
+  if (list && list.startsWith("/customers?")) redirect(`${list}&ok=groupedlist&hl=${data}#c-${data}`);
   redirect(`/customers/${data}?ok=grouped`);
 }
 

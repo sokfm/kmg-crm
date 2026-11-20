@@ -11,6 +11,7 @@ export default async function GroupCustomers({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const { supabase, isAdmin } = await requireProfile();
   if (!isAdmin) redirect("/customers");
+  const backTo = typeof sp.back === "string" && sp.back.startsWith("/customers") ? sp.back : "/customers";
   const raw = sp.ids ?? [];
   const ids = (Array.isArray(raw) ? raw : raw.split(",")).filter((x) => /^[0-9a-f-]{36}$/.test(x));
   const [{ data }, { data: groups }] = await Promise.all([
@@ -25,7 +26,7 @@ export default async function GroupCustomers({ searchParams }: { searchParams: P
 
   return (
     <main className="wrap" style={{ maxWidth: 720 }}>
-      <Link href="/customers" className="muted">← Clients</Link>
+      <Link href={backTo} className="muted">← Clients</Link>
       <h1>Σε Group</h1>
       <Flash sp={flash} />
       {brands.length === 0 ? (
@@ -34,6 +35,7 @@ export default async function GroupCustomers({ searchParams }: { searchParams: P
         <form action={setGroupAction} className="card stack">
           {brands.map((b) => <input key={b.id} type="hidden" name="ids" value={b.id} />)}
           <input type="hidden" name="back" value={back} />
+          <input type="hidden" name="list" value={backTo} />
           <p style={{ margin: 0 }}>Αυτά θα γίνουν <strong>brands</strong> του ίδιου Group. Κρατούν το δικό τους ιστορικό και Account Executive· στο Group βλέπεις το σύνολο.</p>
           <div className="list">
             {brands.map((b) => (
@@ -52,7 +54,7 @@ export default async function GroupCustomers({ searchParams }: { searchParams: P
           <label>Όνομα νέου Group<input name="new_name" placeholder="π.χ. ΚΡΙΜΑΤΟΓΛΟΥ" /></label>
           <div className="row">
             <SubmitButton>Μέσα στο Group</SubmitButton>
-            <Link href="/customers" className="btn secondary">Άκυρο</Link>
+            <Link href={backTo} className="btn secondary">Άκυρο</Link>
           </div>
         </form>
       )}

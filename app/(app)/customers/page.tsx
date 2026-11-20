@@ -3,6 +3,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { searchKey, CHANNEL, aeLabel, customerState, eur, monthsAgo, periodGr } from "@/lib/format";
 import { LiveSearch } from "@/components/LiveSearch";
+import { MergeBar } from "@/components/MergeBar";
 import { claimCustomer, decideClaim } from "../actions";
 import { Flash } from "@/components/Flash";
 
@@ -83,6 +84,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           </div>
           {isAdmin && (
             <form id="merge" action="/customers/merge" className="row">
+              <input type="hidden" name="back" value={here} />
               <SubmitButton className="secondary">🔗 Ένωση επιλεγμένων</SubmitButton>
               <button type="submit" formAction="/customers/group" className="secondary">Σε Group</button>
             </form>
@@ -170,8 +172,8 @@ export default async function Customers({ searchParams }: { searchParams: Promis
             {rows.map((c) => {
               const ly = c.last_period?.slice(0, 4);
               return (
-                <tr key={c.id}>
-                  {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
+                <tr key={c.id} id={`c-${c.id}`} style={sp.hl === c.id ? { background: "#fff6d6" } : undefined}>
+                  {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" data-name={c.display_name} data-rev={Number(c.lifetime_revenue ?? 0)} style={{ width: 17, height: 17 }} /></td>}
                   <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link>{c.is_group && <span className="badge onair" style={{ marginLeft: 6 }}>Group</span>}{c.parent_name && <div className="muted" style={{ fontSize: 12 }}>Group: {c.parent_name}</div>}<div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
                   <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
@@ -214,6 +216,8 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           {(page + 1) * PAGE < total && <Link className="btn secondary" href={href({ page: String(page + 1) })}>Επόμενοι ›</Link>}
         </div>
       )}
+      {isAdmin && <MergeBar back={here} />}
+      {isAdmin && <div style={{ height: 70 }} />}
     </main>
   );
 }
