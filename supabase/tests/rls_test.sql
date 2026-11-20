@@ -757,9 +757,9 @@ insert into proposal_items (id, proposal_id, station, kind, title, monthly_amoun
 do $$ declare a text; b text; pc text; begin
   select title into a from proposals where id = 'e9000000-0000-0000-0000-000000000001';
   select title into b from proposals where id = 'e9000000-0000-0000-0000-000000000002';
-  assert a like 'ΟΝΟΜΑΤΑ ΤΕΣΤ · % 20__', 'λάθος αυτόματο όνομα πρότασης: ' || a;
+  assert a = 'ΟΝΟΜΑΤΑ ΤΕΣΤ ' || to_char((now() at time zone 'Europe/Athens')::date, 'DDMMYY'), 'λάθος αυτόματο όνομα πρότασης: ' || a;
   assert b = a || ' (2)', 'η δεύτερη πρόταση δεν πήρε (2): ' || b;
-  assert (select title from proposals where id = 'e9000000-0000-0000-0000-000000000003') = 'ΟΝΟΜΑΤΑ ΤΕΣΤ · Χριστούγεννα', 'το όνομα δεν πήρε την καμπάνια';
+  assert (select title from proposals where id = 'e9000000-0000-0000-0000-000000000003') = 'ΟΝΟΜΑΤΑ ΤΕΣΤ ' || to_char((now() at time zone 'Europe/Athens')::date, 'DDMMYY') || ' · Χριστούγεννα', 'το όνομα δεν πήρε την καμπάνια';
   assert (select title from proposals where id = 'e9000000-0000-0000-0000-000000000004') = 'Δικό μου όνομα', 'πάτησε το όνομα που έγραψε ο χρήστης';
   select code into pc from proposals where id = 'e9000000-0000-0000-0000-000000000001';
   assert (select code from proposal_items where id = 'e9100000-0000-0000-0000-000000000001') = pc || '-P1', 'λάθος κωδικός πρώτου πλάνου';

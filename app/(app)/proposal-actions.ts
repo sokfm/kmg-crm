@@ -45,7 +45,7 @@ export async function createProposal(f: FormData) {
   const leadId = s(f, "lead_id")!;
   const type = s(f, "client_type") as ClientType | null;
   if (!type || !TYPES.includes(type)) go(list(leadId), { error: "Διάλεξε είδος πελάτη" });
-  // Χωρίς όνομα → το βάζει η βάση («ΠΕΛΑΤΗΣ · καμπάνια» ή «ΠΕΛΑΤΗΣ · μήνας έτος»)
+  // Χωρίς όνομα → το βάζει η βάση («ΠΕΛΑΤΗΣ 201126» ή «ΠΕΛΑΤΗΣ 201126 · καμπάνια»)
   const row: Record<string, unknown> = { lead_id: leadId, client_type: type, campaign: s(f, "campaign")?.slice(0, 120) ?? null };
   if (s(f, "title")) row.title = s(f, "title")!.slice(0, 80);
   const { data, error } = await supabase.from("proposals").insert(row).select("id").single();

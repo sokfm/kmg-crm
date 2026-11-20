@@ -291,10 +291,22 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 .stale { font-size: 11px; color: #b54708; font-weight: 600; }
 .own { width: 24px; height: 24px; border-radius: 50%; background: var(--night); color: #fff; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
 .own.none { background: #e5e1ea; color: #6b6574; }
+.stage-btns { display: flex; gap: 6px; margin-top: 2px; }
+.stage-btns button { padding: 6px 10px; font-size: 12.5px; min-height: 34px; }
+.stage-btns .nx { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage-btns .ok { color: #1f6b3a; border-color: #9fd8b1; }
+.stage-btns .no { color: #8a8491; }
 @media (hover: hover) and (min-width: 861px) {
-  .deal .mv { display: none; }
-  .deal:hover .mv { display: inline-flex; }
+  .deal .stage-btns { display: none; }
+  .deal:hover .stage-btns { display: flex; }
 }
+@media (hover: none) {
+  .deal, .deal a { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+}
+.board.dragging { scroll-snap-type: none; }
+.deal.lifted { opacity: .35; }
+.deal-ghost { position: fixed; z-index: 60; pointer-events: none; transform: translate(-50%, -120%) rotate(-2deg); background: #fff; border: 1px solid #f0b9e7; border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; max-width: 70vw; box-shadow: 0 12px 28px rgba(30, 10, 40, .28); font-size: 14px; }
+.deal-ghost span { font-weight: 800; font-size: 13px; }
 .drop { border-radius: 14px; border-color: #d6d1dc; }
 .drop.won { background: #ecf8f0; border-color: #9fd8b1; color: #1f6b3a; }
 .seg-toggle { display: inline-flex; border: 1px solid #dcd8e1; border-radius: 10px; overflow: hidden; background: #fff; }

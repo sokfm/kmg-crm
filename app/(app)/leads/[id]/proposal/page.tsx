@@ -64,7 +64,7 @@ export default async function Proposals({
         <input type="hidden" name="lead_id" value={id} />
         <div className="grid2">
           <label>Για ποια καμπάνια είναι; (προαιρετικά)<input name="campaign" maxLength={120} placeholder="π.χ. Χριστούγεννα, Εγκαίνια, Ανανέωση 2027" /></label>
-          <label>Όνομα (προαιρετικά)<input name="title" maxLength={80} placeholder={`αυτόματα: ${lead.company_name} · καμπάνια ή μήνας`} /></label>
+          <label>Όνομα (προαιρετικά)<input name="title" maxLength={80} placeholder={`αυτόματα: ${lead.company_name} + ημερομηνία (π.χ. 201126)`} /></label>
         </div>
         <div className="muted" style={{ marginTop: -6 }}>Κωδικός και όνομα μπαίνουν μόνα τους. Γράψε όνομα μόνο αν θες κάτι δικό σου.</div>
         <div className="muted">Τι πελάτης είναι; Ισχύει για όλα τα μέσα αυτής της πρότασης.{hasAgency ? " Η καρτέλα του έχει πρακτορείο." : ""}</div>
