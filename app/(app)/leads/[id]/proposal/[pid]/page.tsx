@@ -4,8 +4,11 @@ import { requireProfile } from "@/lib/auth";
 import { Flash } from "@/components/Flash";
 import { SubmitButton } from "@/components/SubmitButton";
 import { AutoSelect } from "@/components/AutoSelect";
+import { AutoDate } from "@/components/AutoDate";
+import { addDays, proposalByMonth, ymLabel } from "@/lib/forecast";
+import { dateGr } from "@/lib/format";
 import { CLIENT_HINT, CLIENT_LABEL, STATIONS, itemTotal, type ClientType, type Item } from "@/lib/pricing";
-import { addPackageItem, copyProposal, decideDiscount, deleteItem, deleteProposal, renameProposal, requestDiscount, setClientType, setItemMonths, setMainProposal, togglePrepay } from "../../../../proposal-actions";
+import { addPackageItem, copyProposal, decideDiscount, deleteItem, deleteProposal, renameProposal, requestDiscount, setClientType, setItemMonths, setItemStart, setMainProposal, togglePrepay } from "../../../../proposal-actions";
 
 type Pkg = {
   id: string; station: string; kind: "spots" | "sponsorship" | "mention"; client_type: string; name: string; description: string | null;
@@ -43,6 +46,7 @@ export default async function ProposalPage({
   const budget = items.reduce((a, i) => a + itemTotal(i).total, 0);
   const { data: tot } = await supabase.from("proposal_totals").select("list_total, combo_pct, prepay_pct, book_total, final_total").eq("proposal_id", pid).maybeSingle();
   const T = { list: Number(tot?.list_total ?? budget), combo: Number(tot?.combo_pct ?? 0), prepay: Number(tot?.prepay_pct ?? 0), book: Number(tot?.book_total ?? budget), final: Number(tot?.final_total ?? budget) };
+  const byMonth = proposalByMonth(items, T.final);
   const afterCombo = Math.round(T.list * (100 - T.combo)) / 100;
   const requester = (p.requester as unknown as { full_name: string } | null)?.full_name ?? "Account Executive";
   const decider = (p.decider as unknown as { full_name: string } | null)?.full_name ?? "";
@@ -127,6 +131,16 @@ export default async function ProposalPage({
                           <span className="muted" style={{ fontSize: 13 }}>Διάρκεια</span>
                           <AutoSelect name="months" value={String(i.months)} options={MONTH_OPTS} label="Διάρκεια σε μήνες" />
                         </form>)}
+                        {i.kind === "plan" && !locked ? (
+                          <span className="muted" style={{ fontSize: 13 }}>Έναρξη: {i.start_date ? `${dateGr(i.start_date)} έως ${dateGr(addDays(i.start_date, i.months * 30 - 1))}` : "—"}<br />(αλλάζει μέσα στο πλάνο)</span>
+                        ) : (
+                          <form action={setItemStart} className="row" style={{ gap: 6, alignItems: "center" }}>
+                            {ids}<input type="hidden" name="id" value={i.id} /><input type="hidden" name="version" value={i.version} />
+                            <span className="muted" style={{ fontSize: 13 }}>Έναρξη</span>
+                            <AutoDate name="start_date" value={i.start_date ?? ""} label="Ημερομηνία έναρξης καμπάνιας" />
+                            {i.start_date && <span className="muted" style={{ fontSize: 13 }}>έως {dateGr(addDays(i.start_date, i.months * 30 - 1))}</span>}
+                          </form>
+                        )}
                         <div style={{ textAlign: "right", minWidth: 110 }}>
                           <div style={{ fontSize: 18, fontWeight: 800 }}>{eur(t.total)}</div>
                           <div className="row" style={{ gap: 10, justifyContent: "flex-end", fontSize: 13 }}>
@@ -173,6 +187,15 @@ export default async function ProposalPage({
                 )}
                 <div className="muted" style={{ fontSize: 13 }}>Χωρίς ΦΠΑ. Το 8% και το 10% είναι by the book και δεν θέλουν έγκριση.</div>
 
+                <div style={{ background: "#f7f6f9", borderRadius: 12, padding: 12, marginTop: 10 }}>
+                  <strong>Τζίρος ανά μήνα</strong> <span className="muted" style={{ fontSize: 13 }}>· το ποσό σπάει στις ημέρες που παίζει κάθε μήνα</span>
+                  {byMonth.months.length > 0 && (
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                      {byMonth.months.map((m) => <span key={m.ym} className="badge gray" style={{ fontSize: 13 }}>{ymLabel(m.ym)}: <strong>{eur(m.amount)}</strong></span>)}
+                    </div>
+                  )}
+                  {byMonth.undated > 0 && <div className="late-txt" style={{ fontSize: 13, marginTop: 6 }}>{eur(byMonth.undated)} χωρίς μήνα: βάλε ημερομηνία έναρξης στις γραμμές που δεν έχουν.</div>}
+                </div>
                 {(!locked || p.req_status === "approved") && <div style={{ border: "1px solid #ebe8ef", borderRadius: 12, padding: 12, marginTop: 10 }} className="stack">
                   <strong>Ειδική τιμή (θέλει έγκριση)</strong>
                   {p.req_status === "pending" && (

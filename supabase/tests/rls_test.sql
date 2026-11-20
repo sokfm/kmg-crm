@@ -571,4 +571,14 @@ do $$ declare a int; b int; begin
   end if;
 end $$;
 
+-- 31. Έναρξη καμπάνιας σε κλειδωμένη πρόταση: αλλάζει, αλλά τίποτα άλλο
+select as_user(3);
+do $$ begin
+  update proposal_items set start_date = date '2026-11-15' where id = 'e2000000-0000-0000-0000-000000000001';
+  assert (select start_date from proposal_items where id = 'e2000000-0000-0000-0000-000000000001') = date '2026-11-15', 'δεν άλλαξε η έναρξη σε κλειδωμένη';
+  begin update proposal_items set start_date = date '2026-12-01', months = 3 where id = 'e2000000-0000-0000-0000-000000000001'; assert false, 'άλλαξε διάρκεια μαζί με την έναρξη';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { fetchRevenue, type RevRow } from "@/lib/revenue";
+import { proposalByMonth, ymLabel, type FItem } from "@/lib/forecast";
 import { requireProfile } from "@/lib/auth";
 import { CHANNEL, eur, today } from "@/lib/format";
 
@@ -38,6 +39,25 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     supabase.from("agencies").select("id, name"),
     supabase.from("leads").select("status, expected_value").not("status", "in", "(won,lost)"),
   ]);
+
+  // Πρόβλεψη τζίρου από τις κύριες προτάσεις: κλεισμένα (κερδισμένα leads) και ανοιχτά (ακόμα στο pipeline), ξεχωριστά
+  const [{ data: mainProps }, { data: propTotals }] = await Promise.all([
+    supabase.from("proposals").select("id, leads!inner(status), proposal_items(monthly_amount, long_months, long_amount, months, start_date)").eq("is_main", true),
+    supabase.from("proposal_totals").select("proposal_id, final_total"),
+  ]);
+  const finalOf = new Map((propTotals ?? []).map((x) => [x.proposal_id as string, Number(x.final_total)]));
+  const fMonths = Array.from({ length: 6 }, (_, i) => { const d = new Date(Date.UTC(nowY, nowM - 1 + i, 1)); return d.toISOString().slice(0, 7); });
+  const fc = new Map(fMonths.map((ym) => [ym, { won: 0, open: 0 }]));
+  const fcUndated = { won: 0, open: 0 }, fcLater = { won: 0, open: 0 };
+  for (const p of (mainProps ?? []) as unknown as { id: string; leads: { status: string }; proposal_items: FItem[] }[]) {
+    const st = p.leads?.status;
+    if (st === "lost" || !p.proposal_items?.length) continue;
+    const k = st === "won" ? "won" : "open";
+    const r = proposalByMonth(p.proposal_items, finalOf.get(p.id) ?? 0);
+    fcUndated[k] += r.undated;
+    for (const m of r.months) { const e = fc.get(m.ym); if (e) e[k] += m.amount; else if (m.ym > fMonths[5]) fcLater[k] += m.amount; }
+  }
+  const hasForecast = [...fc.values()].some((v) => v.won || v.open) || fcUndated.won + fcUndated.open + fcLater.won + fcLater.open > 0;
 
   const sum = (f: (r: Row) => boolean) => rows.reduce((s, r) => (f(r) ? s + Number(r.amount) : s), 0);
   const month = (y: number, m: number) => sum((r) => r.year === y && r.month === m);
@@ -135,6 +155,25 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <Link href="/pipeline" className="muted">εκτιμώμενη αξία {eur(pipeValue)} ›</Link>
         </div>
       </div>
+
+      {Y === nowY && hasForecast && (
+        <div className="card">
+          <h2>Προβλεπόμενος τζίρος από προτάσεις</h2>
+          <p className="muted" style={{ marginTop: 0 }}>Από την κύρια πρόταση κάθε lead. Το ποσό σπάει στις ημέρες που παίζει κάθε μήνα. Τα ανοιχτά δεν είναι λεφτά ακόμα, γι' αυτό μένουν χωριστά.</p>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Μήνας</th><th className="num">Κλεισμένα</th><th className="num">Ανοιχτά (pipeline)</th></tr></thead>
+              <tbody>
+                {fMonths.map((ym) => (
+                  <tr key={ym}><td>{ymLabel(ym)}</td><td className="num"><strong>{eur(fc.get(ym)!.won)}</strong></td><td className="num muted">{eur(fc.get(ym)!.open)}</td></tr>
+                ))}
+                {fcLater.won + fcLater.open > 0 && <tr><td className="muted">Αργότερα</td><td className="num">{eur(fcLater.won)}</td><td className="num muted">{eur(fcLater.open)}</td></tr>}
+                {fcUndated.won + fcUndated.open > 0 && <tr><td className="late-txt">Χωρίς ημερομηνία έναρξης</td><td className="num">{eur(fcUndated.won)}</td><td className="num muted">{eur(fcUndated.open)}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="row">

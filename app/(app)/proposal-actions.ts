@@ -224,6 +224,20 @@ export async function setItemMonths(f: FormData) {
   go(pp(leadId, pid));
 }
 
+// Ημερομηνία έναρξης καμπάνιας για μια γραμμή (από αυτήν βγαίνει ο τζίρος ανά μήνα). Αλλάζει και σε κλειδωμένη πρόταση.
+export async function setItemStart(f: FormData) {
+  const { supabase } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const start = s(f, "start_date");
+  if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) go(pp(leadId, pid), { error: "Βάλε ημερομηνία έναρξης" });
+  const { data, error } = await supabase.from("proposal_items").update({ start_date: start }).eq("id", s(f, "id")).eq("version", Number(s(f, "version"))).select("id");
+  if (error) go(pp(leadId, pid), { error: msg(error) });
+  if (!data || data.length === 0) go(pp(leadId, pid), { conflict: "1" });
+  revalidatePath(pp(leadId, pid)); revalidatePath("/dashboard");
+  go(pp(leadId, pid));
+}
+
 export async function deleteItem(f: FormData) {
   const { supabase } = await requireProfile();
   const leadId = s(f, "lead_id")!;
