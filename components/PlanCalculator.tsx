@@ -66,6 +66,23 @@ export function PlanCalculator({ cols, slots, defaultStart, lockStation, initial
   const weekdaysOnly = () =>
     update((g) => { for (const r of rows) { const a = row(g, r.slot); if (a.some((v) => v > 0)) g[r.slot] = a.map((v, d) => (days[d] !== 0 && days[d] !== 6 ? Math.max(v, 1) : 0)); } return g; });
 
+  // Συμπλήρωσες ΜΙΑ μέρα; Η πρώτη μέρα που έχει σποτ αντιγράφεται σε όλες τις 30.
+  const repeatDay = () =>
+    update((g) => {
+      const src = Array.from({ length: nDays }, (_, d) => d).find((d) => rows.some((r) => (g[r.slot]?.[d] ?? 0) > 0));
+      if (src == null) return g;
+      for (const r of rows) { const a = row(g, r.slot); if (a[src] > 0 || a.some((v) => v > 0)) g[r.slot] = a.map(() => a[src]); }
+      return g;
+    });
+  // Συμπλήρωσες ΜΙΑ εβδομάδα; Οι πρώτες 7 ημέρες του πλάνου επαναλαμβάνονται μέχρι το τέλος (ίδια μέρα της εβδομάδας, ίδια σποτ).
+  const repeatWeek = () =>
+    update((g) => {
+      for (const r of rows) { const a = row(g, r.slot); if (a.some((v) => v > 0)) g[r.slot] = a.map((_, d) => a[d % 7]); }
+      return g;
+    });
+  const firstFilled = Array.from({ length: nDays }, (_, d) => d).find((d) => rows.some((r) => cell(r.slot, d) > 0));
+  const weekFilled = rows.some((r) => [0, 1, 2, 3, 4, 5, 6].some((d) => cell(r.slot, d) > 0));
+
   const t = useMemo(() => {
     let spots = 0;
     const totals = priceCols.map(() => 0);
@@ -104,8 +121,10 @@ export function PlanCalculator({ cols, slots, defaultStart, lockStation, initial
       <div className="card" style={{ padding: 0 }}>
         <div className="row" style={{ gap: 8, flexWrap: "wrap", padding: "10px 12px", borderBottom: "1px solid #eee", alignItems: "center" }}>
           <strong>{station} · {fmtD(first)} – {fmtD(last)} (30 ημέρες){product ? ` · ${product}` : ""}</strong>
-          <span className="muted" style={{ fontSize: 12 }}>Κλικ σε κελί: 0→1→2→3 · κλικ στην ώρα: όλη η γραμμή · κλικ στην ημέρα: όλη η στήλη</span>
+          <span className="muted" style={{ fontSize: 12 }}>Κλικ σε κελί: 0→1→2→3 · κλικ στην ώρα: όλη η γραμμή · κλικ στην ημέρα: όλη η στήλη · ή γέμισε μία μέρα / μία εβδομάδα και πάτα «⇢»</span>
           <span style={{ flex: 1 }} />
+          <button type="button" className="secondary" onClick={repeatDay} disabled={firstFilled == null} title="Συμπλήρωσε μία μέρα και πάτα: τα ίδια σποτ μπαίνουν και στις 30 ημέρες">⇢ Ίδια μέρα σε όλο τον μήνα</button>
+          <button type="button" className="secondary" onClick={repeatWeek} disabled={!weekFilled} title="Συμπλήρωσε τις πρώτες 7 ημέρες και πάτα: η εβδομάδα επαναλαμβάνεται μέχρι το τέλος του πλάνου">⇢ Ίδια εβδομάδα σε όλο τον μήνα</button>
           <button type="button" className="secondary" onClick={weekdaysOnly}>Μόνο Δευ–Παρ</button>
           <button type="button" className="secondary" onClick={() => update(() => ({}))}>Καθάρισμα</button>
         </div>
