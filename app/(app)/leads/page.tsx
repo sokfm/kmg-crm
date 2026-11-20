@@ -51,6 +51,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<Re
   if (view === "unassigned") q = q.is("owner_id", null);
   if (view === "won" || view === "lost") q = q.eq("status", view);
   if (sp.q && searchKey(sp.q)) q = q.like("name_key", `%${searchKey(sp.q)}%`);
+  const poolN = (await supabase.from("lost_pool").select("id", { count: "exact", head: true })).count ?? 0;
   const { data } = await q;
   const rows = (data ?? []) as unknown as Row[];
   const { data: people } = isAdmin
@@ -79,6 +80,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<Re
               <SubmitButton className="secondary">Εμφάνιση</SubmitButton>
             </form>
           </div>
+          <Link href="/leads/pool" className="btn secondary">🚪 Διαθέσιμα χαμένα{poolN ? ` (${poolN})` : ""}</Link>
           <Link href="/pipeline" className="btn secondary">Pipeline</Link>
           <Link href="/leads/new" className="btn">Νέο</Link>
         </div>

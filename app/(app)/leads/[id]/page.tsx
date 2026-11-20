@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { ACTIVITY, LOST_KINDS, STAGES, dateGr, eur, periodGr, today } from "@/lib/format";
-import { addActivity, updateLead, webLookup } from "../../actions";
+import { moveLead, addActivity, updateLead, webLookup } from "../../actions";
+import { releaseLost } from "../../pool-actions";
 import { Flash } from "@/components/Flash";
 import { assignees } from "@/lib/assignees";
 import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/Tasks";
@@ -106,6 +107,30 @@ export default async function LeadPage({
           <div><span>Τελευταία επαφή</span><strong>{lastContact ? dateGr(lastContact.occurred_at) : "καμία"}</strong></div>
         </div>
       </div>
+
+      {/* Χαμένο lead με υπεύθυνο: ή το ξανατρέχεις ή το αφήνεις να το πάρει άλλος */}
+      {lead.status === "lost" && lead.lost_kind !== "never" && lead.owner_id && (isAdmin || lead.owner_id === profile.id) && (
+        <div className="card stack" style={{ background: "var(--orange-bg)" }}>
+          <strong>🚪 Τι κάνουμε με αυτό το «όχι»;</strong>
+          <span className="muted">
+            {lead.reknock_on ? `Ξαναχτυπάμε την πόρτα στις ${dateGr(lead.reknock_on)}. ` : ""}Αν δεν το ξανατρέξεις μέσα σε 10 ημέρες από εκείνη τη μέρα, περνάει μόνο του στα «Διαθέσιμα χαμένα» και μπορεί να το ζητήσει άλλος.
+          </span>
+          <form action={moveLead} className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <input type="hidden" name="id" value={lead.id} /><input type="hidden" name="version" value={lead.version} />
+            <input type="hidden" name="status" value="contacted" /><input type="hidden" name="back" value={`/leads/${lead.id}`} />
+            <label className="grow" style={{ minWidth: 200 }}>Επόμενο βήμα<input name="next_step" required placeholder="π.χ. Τηλέφωνο για νέα πρόταση" /></label>
+            <label>Πότε<input name="next_step_due" type="date" required defaultValue={in3} /></label>
+            <SubmitButton pending="Ανοίγει…">Το ξανατρέχω</SubmitButton>
+          </form>
+          <form action={releaseLost}>
+            <input type="hidden" name="id" value={lead.id} />
+            <SubmitButton className="secondary" pending="…">Το αφήνω στα διαθέσιμα</SubmitButton>
+          </form>
+        </div>
+      )}
+      {lead.status === "lost" && !lead.owner_id && lead.lost_kind !== "never" && (
+        <div className="msg" style={{ background: "var(--orange-bg)" }}>Αυτό το χαμένο lead είναι στα <Link href="/leads/pool">Διαθέσιμα χαμένα</Link>: δεν έχει υπεύθυνο και μπορεί να το ζητήσει όποιος Account Executive.</div>
+      )}
 
       {/* Μπάρα σταδίων */}
       <div className="card" style={{ padding: 10 }}>

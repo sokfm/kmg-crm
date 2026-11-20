@@ -693,4 +693,53 @@ do $$ begin
 end $$;
 reset role;
 
+-- 38. Διαθέσιμα χαμένα: «το αφήνω», αυτόματα στις 10 ημέρες, αίτημα από άλλον, ΟΚ από Νίκο/Γιάννα
+select as_user(1);
+insert into leads (id, company_name, owner_id, next_step, next_step_due, phone) values
+ ('d8000000-0000-0000-0000-000000000001','ΔΙΑΘΕΣΙΜΟ ΕΝΑ','00000000-0000-0000-0000-000000000003','x', current_date + 1, '2221099999'),
+ ('d8000000-0000-0000-0000-000000000002','ΔΙΑΘΕΣΙΜΟ ΔΥΟ','00000000-0000-0000-0000-000000000003','x', current_date + 1, null),
+ ('d8000000-0000-0000-0000-000000000003','ΠΟΤΕ ΞΑΝΑ','00000000-0000-0000-0000-000000000003','x', current_date + 1, null);
+select as_user(3);
+update leads set status = 'lost', lost_kind = 'not_now', lost_reason = 'μετά το καλοκαίρι' where id in ('d8000000-0000-0000-0000-000000000001','d8000000-0000-0000-0000-000000000002');
+update leads set status = 'lost', lost_kind = 'never' where id = 'd8000000-0000-0000-0000-000000000003';
+do $$ begin
+  begin update leads set owner_id = null where id = 'd8000000-0000-0000-0000-000000000001'; assert false, 'ο Κώστας άλλαξε υπεύθυνο χωρίς τη συνάρτηση';
+  exception when insufficient_privilege then null; end;
+  begin perform release_lost_lead('d8000000-0000-0000-0000-000000000003'); assert false, 'το «όχι ποτέ» μπήκε στα διαθέσιμα';
+  exception when others then null; end;
+  perform release_lost_lead('d8000000-0000-0000-0000-000000000001');   -- «Το αφήνω»
+  assert (select count(*) from lost_pool where id = 'd8000000-0000-0000-0000-000000000001') = 1, 'δεν μπήκε στα διαθέσιμα';
+  assert (select count(*) from leads where id = 'd8000000-0000-0000-0000-000000000001') = 0, 'ο Κώστας βλέπει ακόμα την καρτέλα του αφημένου lead';
+end $$;
+reset role;
+alter table leads disable trigger user;
+update leads set reknock_on = (now() at time zone 'Europe/Athens')::date - 10 where id = 'd8000000-0000-0000-0000-000000000002';
+alter table leads enable trigger user;
+do $$ begin
+  if (now() at time zone 'Europe/Athens')::time >= time '09:00' and (now() at time zone 'Europe/Athens')::time < time '20:00' then
+    perform make_reminders();
+    assert (select owner_id from leads where id = 'd8000000-0000-0000-0000-000000000002') is null, 'δεν αφέθηκε μόνο του στις 10 ημέρες';
+    assert (select released_from from leads where id = 'd8000000-0000-0000-0000-000000000002') = '00000000-0000-0000-0000-000000000003', 'δεν κρατήθηκε ποιος το είχε';
+  end if;
+end $$;
+select as_user(4);
+do $$ declare r record; begin
+  select * into r from lost_pool where id = 'd8000000-0000-0000-0000-000000000001';
+  assert r.company_name = 'ΔΙΑΘΕΣΙΜΟ ΕΝΑ' and r.lost_reason = 'μετά το καλοκαίρι' and r.had_it = 'Κώστας Σταμουλάκης', 'η Μαρία δεν βλέπει το διαθέσιμο';
+  assert (select count(*) from leads where id = 'd8000000-0000-0000-0000-000000000001') = 0, 'η Μαρία βλέπει τηλέφωνα πριν το πάρει';
+  assert (select count(*) from lost_pool where id = 'd8000000-0000-0000-0000-000000000003') = 0, 'το «όχι ποτέ» φαίνεται στα διαθέσιμα';
+  perform request_lost_lead('d8000000-0000-0000-0000-000000000001', 'τον ξέρω προσωπικά');
+  begin perform decide_lead_claim((select id from lead_claims where lead_id = 'd8000000-0000-0000-0000-000000000001'), true); assert false, 'η Μαρία ενέκρινε μόνη της';
+  exception when insufficient_privilege then null; end;
+end $$;
+select as_user(2);   -- η Γιάννα δίνει το ΟΚ
+select decide_lead_claim((select id from lead_claims where lead_id = 'd8000000-0000-0000-0000-000000000001' and status = 'pending'), true);
+select as_user(4);
+do $$ declare r leads; begin
+  select * into r from leads where id = 'd8000000-0000-0000-0000-000000000001';
+  assert r.owner_id = '00000000-0000-0000-0000-000000000004' and r.status = 'contacted' and r.next_step_due is not null and r.phone = '2221099999', 'το lead δεν ξανάνοιξε στη Μαρία';
+  assert (select count(*) from lost_pool where id = 'd8000000-0000-0000-0000-000000000001') = 0, 'έμεινε στα διαθέσιμα';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;
