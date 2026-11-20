@@ -42,9 +42,18 @@ export const CHANNEL: Record<string, string> = {
   media_shop: "Media Shop",
 };
 
-// Ίδια κανονικοποίηση με τη gr_norm της βάσης: πεζά, χωρίς τόνους, τελικό σίγμα → σ
-export function grNorm(t: string) {
-  return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ς/g, "σ");
+// Κλειδί αναζήτησης: ίδια λογική με τη gr_key της βάσης (0035). Ελληνικά, greeklish, τόνοι, διπλά γράμματα → ένα κλειδί.
+const KEY_GR: [string, string][] = [["ου", "u"], ["αι", "e"], ["ει", "i"], ["οι", "i"], ["υι", "i"], ["μπ", "v"], ["ντ", "d"], ["γκ", "g"], ["γγ", "g"], ["αυ", "av"], ["ευ", "ev"], ["ψ", "ps"]];
+const KEY_LA: [string, string][] = [["ch", "x"], ["th", "t"], ["ph", "v"], ["ks", "x"], ["ou", "u"], ["ai", "e"], ["ei", "i"], ["oi", "i"], ["mp", "v"], ["nt", "d"], ["gk", "g"]];
+const tr = (s: string, from: string, to: string) => [...s].map((c) => { const i = from.indexOf(c); return i < 0 ? c : to[i]; }).join("");
+export function searchKey(t: string) {
+  // όπως η gr_norm: πεζά, μόνο οι ελληνικοί τόνοι/διαλυτικά φεύγουν, ς → σ
+  let s = tr(t.toLowerCase(), "άέήίόύώϊϋΐΰς", "αεηιουωιυιυσ");
+  for (const [a, b] of KEY_GR) s = s.split(a).join(b);
+  s = tr(s, "αβγδεζηθικλμνξοπρστυφχω", "avgdezitiklmnxoprstivxo");
+  for (const [a, b] of KEY_LA) s = s.split(a).join(b);
+  s = tr(s, "bcqwyhf", "vkkoixv");
+  return s.replace(/[^a-z0-9 ]/g, "").replace(/(.)\1+/g, "$1").trim();
 }
 
 export function today() {

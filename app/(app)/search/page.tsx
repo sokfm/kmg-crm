@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
-import { STAGES, eur, periodGr, customerState, grNorm } from "@/lib/format";
+import { STAGES, eur, periodGr, customerState, searchKey } from "@/lib/format";
 import { LiveSearch } from "@/components/LiveSearch";
 
 // Αναζήτηση παντού (Ctrl K): πελάτες, leads, media shops.
@@ -8,11 +8,12 @@ export default async function Search({ searchParams }: { searchParams: Promise<R
   const sp = await searchParams;
   const { supabase } = await requireProfile();
   const q = (sp.q ?? "").trim().replace(/[%,()]/g, "");
+  const key = searchKey(q);
   const [c, l, a] = q
     ? await Promise.all([
-        supabase.from("customers").select("id, display_name, status, last_period, lifetime_revenue").like("name_search", `%${grNorm(q)}%`).order("lifetime_revenue", { ascending: false }).limit(15),
-        supabase.from("leads").select("id, company_name, status, contact_name").or(`company_name.ilike.%${q}%,contact_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`).limit(15),
-        supabase.from("agencies").select("id, name").ilike("name", `%${q}%`).limit(5),
+        supabase.from("customers").select("id, display_name, status, last_period, lifetime_revenue").like("name_key", `%${key || "~"}%`).order("lifetime_revenue", { ascending: false }).limit(15),
+        supabase.from("leads").select("id, company_name, status, contact_name").or(`${key ? `name_key.like.%${key}%,` : ""}email.ilike.%${q}%,phone.ilike.%${q}%`).limit(15),
+        supabase.from("agencies").select("id, name").like("name_key", `%${key || "~"}%`).limit(5),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }];
   const customers = c.data ?? [], leads = l.data ?? [], agencies = a.data ?? [];

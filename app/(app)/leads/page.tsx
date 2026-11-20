@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LiveSearch } from "@/components/LiveSearch";
+import { searchKey } from "@/lib/format";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireProfile } from "@/lib/auth";
 import { STAGES, dateGr, eur, today } from "@/lib/format";
@@ -49,7 +50,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<Re
   if (view === "late") q = q.lt("next_step_due", t);
   if (view === "unassigned") q = q.is("owner_id", null);
   if (view === "won" || view === "lost") q = q.eq("status", view);
-  if (sp.q) q = q.or(`company_name.ilike.%${sp.q.replace(/[%,()]/g, "")}%,contact_name.ilike.%${sp.q.replace(/[%,()]/g, "")}%`);
+  if (sp.q && searchKey(sp.q)) q = q.like("name_key", `%${searchKey(sp.q)}%`);
   const { data } = await q;
   const rows = (data ?? []) as unknown as Row[];
   const { data: people } = isAdmin
