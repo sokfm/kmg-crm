@@ -497,4 +497,23 @@ do $$ begin
   assert (select expected_value from leads where id = 'd0000000-0000-0000-0000-000000000001') = 1490.40, 'μετά την αλλαγή: 1800 x 0,92 x 0,9 = 1490,40';
 end $$;
 
+-- 28. Προσφορά: δεν εκδίδεται με αίτημα σε αναμονή· η αλλαγή κειμένου δεν ακυρώνει έγκριση
+select as_user(3);
+select request_discount('d1000000-0000-0000-0000-000000000001', 1400, 'τεστ');
+do $$ begin
+  begin insert into proposal_offers (proposal_id, lead_id, snapshot, final_total, valid_until) values ('d1000000-0000-0000-0000-000000000001','d0000000-0000-0000-0000-000000000001','{}',1,current_date);
+    assert false, 'βγήκε προσφορά με αίτημα σε αναμονή';
+  exception when insufficient_privilege then null; end;
+end $$;
+select as_user(1);
+select decide_discount('d1000000-0000-0000-0000-000000000001', true);
+select as_user(3);
+update proposal_items set offer_text = '100 FREE SPOT' where proposal_id = 'd1000000-0000-0000-0000-000000000001' and station = 'DALKAS';
+insert into proposal_offers (proposal_id, lead_id, snapshot, final_total, valid_until) values ('d1000000-0000-0000-0000-000000000001','d0000000-0000-0000-0000-000000000001','{}',1400,current_date + 15);
+reset role;
+do $$ begin
+  assert (select req_status from proposals where id = 'd1000000-0000-0000-0000-000000000001') = 'approved', 'η αλλαγή κειμένου ακύρωσε την έγκριση';
+  assert (select count(*) from proposal_offers) = 1, 'δεν αποθηκεύτηκε η προσφορά';
+end $$;
+
 select 'ALL TESTS PASSED' as result;

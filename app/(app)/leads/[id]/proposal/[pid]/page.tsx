@@ -89,6 +89,7 @@ export default async function ProposalPage({
             ) : (
               <form action={setMainProposal}>{ids}<button type="submit" className="secondary">Να μετράει αυτή στο lead</button></form>
             )}
+            {items.length > 0 && <Link href={`${base}/offer`} className="btn">Προσφορά για τον πελάτη →</Link>}
             <form action={copyProposal}>{ids}<button type="submit" className="secondary">Αντίγραφο</button></form>
             {items.length === 0 && <form action={deleteProposal}>{ids}<button type="submit" className="secondary">Διαγραφή</button></form>}
           </div>

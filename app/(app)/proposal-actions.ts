@@ -154,6 +154,8 @@ export async function addPackageItem(f: FormData) {
     long_amount: mention ? null : pk!.long_price,
     long_detail: mention || pk!.long_months == null ? null : spots(pk!.spots_per_day, pk!.long_bonus_spots),
     qty,
+    spots_day: pk!.spots_per_day == null ? null : pk!.spots_per_day + (pk!.bonus_spots ?? 0),
+    long_spots_day: pk!.spots_per_day == null || pk!.long_months == null ? null : pk!.spots_per_day + (pk!.long_bonus_spots ?? pk!.bonus_spots ?? 0),
   });
   if (error) go(pp(leadId, pid), { error: "Δεν αποθηκεύτηκε. Δοκίμασε ξανά." });
   revalidatePath(pp(leadId, pid)); revalidatePath(`/leads/${leadId}`);
@@ -278,4 +280,95 @@ export async function decideDiscount(f: FormData) {
   if (error) go(pp(leadId, pid), { error: msg(error) });
   revalidatePath(pp(leadId, pid)); revalidatePath(`/leads/${leadId}`); revalidatePath("/pipeline");
   go(pp(leadId, pid), { ok: ok ? "discapproved" : "discrejected" });
+}
+
+// ---------- Προσφορά προς τον πελάτη ----------
+const op = (leadId: string, pid: string) => `${pp(leadId, pid)}/offer`;
+
+// Τίτλος καμπάνιας και περιγραφή κάθε γραμμής, όπως θα τα δει ο πελάτης
+export async function saveOfferTexts(f: FormData) {
+  const { supabase } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const { error } = await supabase.from("proposals").update({ offer_subtitle: s(f, "subtitle")?.slice(0, 120) ?? null }).eq("id", pid).eq("lead_id", leadId);
+  if (error) go(op(leadId, pid), { error: msg(error) });
+  for (const [k, v] of f.entries()) {
+    if (!k.startsWith("text_")) continue;
+    const text = String(v).trim().slice(0, 160) || null;
+    const { error: e2 } = await supabase.from("proposal_items").update({ offer_text: text }).eq("id", k.slice(5)).eq("proposal_id", pid);
+    if (e2) go(op(leadId, pid), { error: msg(e2) });
+  }
+  revalidatePath(op(leadId, pid));
+  go(op(leadId, pid), { ok: "saved" });
+}
+
+// Λογότυπο πελάτη: μένει στην καρτέλα του πελάτη (ή στο lead αν δεν έχει ακόμα καρτέλα)
+export async function uploadLogo(f: FormData) {
+  const { supabase } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const file = f.get("logo");
+  if (!(file instanceof File) || file.size === 0) go(op(leadId, pid), { error: "Διάλεξε αρχείο εικόνας" });
+  const img = file as File;
+  if (!["image/png", "image/jpeg", "image/webp"].includes(img.type)) go(op(leadId, pid), { error: "Το λογότυπο πρέπει να είναι PNG, JPG ή WEBP" });
+  if (img.size > 700_000) go(op(leadId, pid), { error: "Το αρχείο είναι πολύ μεγάλο (έως 700 KB). Μίκρυνέ το και ξαναδοκίμασε." });
+  const data = `data:${img.type};base64,${Buffer.from(await img.arrayBuffer()).toString("base64")}`;
+  const { data: lead } = await supabase.from("leads").select("customer_id").eq("id", leadId).maybeSingle();
+  if (!lead) go(op(leadId, pid), { error: "Το lead δεν βρέθηκε" });
+  const key = lead!.customer_id ? { customer_id: lead!.customer_id as string } : { lead_id: leadId };
+  const { error } = await supabase.from("logos").upsert({ ...key, data, updated_at: new Date().toISOString() }, { onConflict: lead!.customer_id ? "customer_id" : "lead_id" });
+  if (error) go(op(leadId, pid), { error: msg(error) });
+  revalidatePath(op(leadId, pid));
+  go(op(leadId, pid), { ok: "logo" });
+}
+
+// Έκδοση προσφοράς: κρατιέται όπως ακριβώς βγήκε και ανοίγει για κατέβασμα σε PDF
+export async function issueOffer(f: FormData) {
+  const { supabase, profile } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const { buildRows, autoSubtitle, VALID_DAYS } = await import("@/lib/offer");
+  const [{ data: p }, { data: tot }, { data: lead }] = await Promise.all([
+    supabase.from("proposals").select("id, client_type, offer_subtitle, prepay, req_status, proposal_items(*)").eq("id", pid).eq("lead_id", leadId).maybeSingle(),
+    supabase.from("proposal_totals").select("list_total, combo_pct, prepay_pct, book_total, final_total").eq("proposal_id", pid).maybeSingle(),
+    supabase.from("leads").select("company_name, owner_id").eq("id", leadId).maybeSingle(),
+  ]);
+  if (!p || !tot || !lead || !p.client_type) go(pp(leadId, pid), { error: "Η πρόταση δεν βρέθηκε" });
+  const items = (p!.proposal_items ?? []) as import("@/lib/offer").OfferItem[];
+  if (!items.length) go(op(leadId, pid), { error: "Η πρόταση είναι άδεια" });
+  if (p!.req_status === "pending") go(op(leadId, pid), { error: "Υπάρχει αίτημα ειδικής τιμής σε αναμονή. Η προσφορά βγαίνει μετά την απάντηση." });
+  const order = [...STATIONS] as string[];
+  items.sort((a, b) => order.indexOf(a.station) - order.indexOf(b.station));
+  const { rows, totalSpots } = buildRows(items, p!.client_type as ClientType);
+  const { data: ae } = await supabase.from("profiles").select("full_name, offer_name, offer_phone, email").eq("id", lead!.owner_id ?? profile.id).maybeSingle();
+  const reasons: string[] = [];
+  if (Number(tot!.combo_pct) > 0) reasons.push(`έκπτωση combo ${tot!.combo_pct}%`);
+  if (Number(tot!.prepay_pct) > 0) reasons.push(`έκπτωση προπληρωμής ${tot!.prepay_pct}%`);
+  if (p!.req_status === "approved") reasons.push("ειδική τιμή");
+  const now = new Date();
+  const valid = new Date(now.getTime() + VALID_DAYS * 86400000);
+  const snapshot = {
+    company: lead!.company_name as string,
+    subtitle: (p!.offer_subtitle as string | null) ?? autoSubtitle(items),
+    local: p!.client_type === "local",
+    rows, totalSpots,
+    list: Number(tot!.list_total), final: Number(tot!.final_total), reasons,
+    issued: now.toISOString(), validUntil: valid.toISOString(),
+    ae: { name: ae?.offer_name ?? ae?.full_name ?? "Kartelias Media Group", phone: ae?.offer_phone ?? null, email: ae?.email ?? null },
+  };
+  const { data: off, error } = await supabase.from("proposal_offers")
+    .insert({ proposal_id: pid, lead_id: leadId, snapshot, final_total: snapshot.final, valid_until: valid.toISOString().slice(0, 10) })
+    .select("id").single();
+  if (error || !off) go(op(leadId, pid), { error: msg(error) });
+  revalidatePath(op(leadId, pid));
+  redirect(`/offer/${off!.id}?print=1`);
+}
+
+// Όνομα και κινητό που γράφονται στις προσφορές σου (Ρυθμίσεις)
+export async function saveOfferContact(f: FormData) {
+  const { supabase } = await requireProfile();
+  const { error } = await supabase.rpc("set_my_offer_contact", { p_name: s(f, "offer_name") ?? "", p_phone: s(f, "offer_phone") ?? "" });
+  if (error) go("/settings", { error: msg(error) });
+  revalidatePath("/settings");
+  go("/settings", { ok: "saved" });
 }

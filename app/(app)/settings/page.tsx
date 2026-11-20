@@ -3,6 +3,7 @@ import { Flash } from "@/components/Flash";
 import { PricingBody } from "@/components/PricingBody";
 import { SubmitButton } from "@/components/SubmitButton";
 import { disconnectOutlook, setPassword, syncMailNow } from "../actions";
+import { saveOfferContact } from "../proposal-actions";
 
 export const maxDuration = 300;
 
@@ -14,6 +15,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const { supabase, profile, isAdmin } = await requireProfile();
   const tab = isAdmin && sp.tab === "pricing" ? "pricing" : "general";
   const { data: acc } = await supabase.from("my_mail_account").select("*").maybeSingle();
+  const { data: offer } = await supabase.from("profiles").select("offer_name, offer_phone").eq("id", profile.id).maybeSingle();
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const count = async (status: string) =>
     (await supabase.from("email_messages").select("id", { count: "exact", head: true }).eq("status", status).gte("created_at", since)).count ?? 0;
@@ -36,6 +38,16 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           Καταγράφηκαν {nLogged} email σε καρτέλες · {nLeads} νέα leads · {nReview} προς έλεγχο · {nTasks} εργασίες.
         </div>
       )}
+
+      <form action={saveOfferContact} className="card stack">
+        <h2 style={{ margin: 0 }}>Τα στοιχεία σου στις προσφορές</h2>
+        <p className="muted" style={{ margin: 0 }}>Γράφονται στο PDF που πάει στον πελάτη, μαζί με το email σου ({profile.email}).</p>
+        <div className="grid2">
+          <label>Ονοματεπώνυμο<input name="offer_name" defaultValue={offer?.offer_name ?? ""} placeholder="π.χ. Nikos Kartelias" maxLength={60} /></label>
+          <label>Κινητό<input name="offer_phone" defaultValue={offer?.offer_phone ?? ""} placeholder="π.χ. 697 000 0000" maxLength={30} /></label>
+        </div>
+        <div><SubmitButton pending="Αποθήκευση…">Αποθήκευση</SubmitButton></div>
+      </form>
 
       <form action={setPassword} className="card stack">
         <h2 style={{ margin: 0 }}>Κωδικός για το κινητό</h2>

@@ -2,6 +2,7 @@ const OK: Record<string, string> = {
   created: "Το lead καταχωρίστηκε.",
   saved: "Αποθηκεύτηκε.",
   itemadded: "Μπήκε στην πρόταση.",
+  logo: "Το λογότυπο αποθηκεύτηκε.",
   discasked: "Το αίτημα στάλθηκε στον Νίκο και τη Γιάννα για έγκριση.",
   discapproved: "Η ειδική τιμή εγκρίθηκε.",
   discrejected: "Η ειδική τιμή δεν εγκρίθηκε. Ισχύει η τιμή by the book.",
