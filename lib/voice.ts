@@ -6,6 +6,7 @@ export type VoiceResult = {
   summary: string;
   next_step: string | null;
   next_step_due: string | null; // YYYY-MM-DD
+  next_step_time: string | null; // ΩΩ:ΛΛ, μόνο αν ειπώθηκε ώρα
   stage: "new" | "contacted" | "meeting" | "proposal" | "negotiation" | null;
   tasks: { title: string; due_date: string | null }[];
   unclear: string | null;
@@ -18,6 +19,7 @@ const SYSTEM = `Είσαι ο βοηθός πωλήσεων της Kartelias Med
 - activity_type: call (τηλέφωνο), meeting (ραντεβού/συνάντηση), viber (μήνυμα), email, ή note αν δεν έγινε επαφή με τον πελάτη.
 - summary: τι έγινε, σε 1–2 καθαρές προτάσεις στα ελληνικά, σε τρίτο πρόσωπο, χωρίς φλυαρία. Κράτα ποσά, ονόματα, ημερομηνίες.
 - next_step: η ΜΙΑ επόμενη κίνηση του Account Executive προς τον πελάτη (π.χ. «Αποστολή προσφοράς», «Τηλέφωνο για απάντηση»). null αν δεν ειπώθηκε και δεν προκύπτει.
+- next_step_time: ώρα ΩΩ:ΛΛ (24ωρο) ΜΟΝΟ αν ειπώθηκε συγκεκριμένη ώρα («στις 11», «στις πεντέμισι το απόγευμα» → 17:30). Αλλιώς null.
 - next_step_due: ημερομηνία YYYY-MM-DD για το επόμενο βήμα. Υπολόγισέ την από τη σημερινή ημερομηνία που σου δίνω («αύριο», «την Τρίτη», «σε δύο βδομάδες», «μετά τις γιορτές»). Αν δεν ειπώθηκε πότε, βάλε null — ΜΗΝ μαντέψεις.
 - stage: βάλε νέο στάδιο ΜΟΝΟ αν προκύπτει καθαρά ότι το lead προχώρησε: contacted (έγινε πρώτη επαφή), meeting (κλείστηκε ή έγινε ραντεβού), proposal (στάλθηκε ή ζητήθηκε προσφορά), negotiation (συζητάνε τιμή/όρους). Αλλιώς null. Ποτέ πίσω από το τωρινό στάδιο.
 - tasks: ΑΛΛΕΣ υποχρεώσεις πωλήσεων που ειπώθηκαν, πέρα από το επόμενο βήμα (έως 3). Συνήθως κενή λίστα.
@@ -34,11 +36,12 @@ const TOOL = {
       summary: { type: "string" },
       next_step: { type: ["string", "null"] },
       next_step_due: { type: ["string", "null"] },
+      next_step_time: { type: ["string", "null"] },
       stage: { type: ["string", "null"], enum: ["new", "contacted", "meeting", "proposal", "negotiation", null] },
       tasks: { type: "array", items: { type: "object", properties: { title: { type: "string" }, due_date: { type: ["string", "null"] } }, required: ["title"] } },
       unclear: { type: ["string", "null"] },
     },
-    required: ["activity_type", "summary", "next_step", "next_step_due", "stage", "tasks", "unclear"],
+    required: ["activity_type", "summary", "next_step", "next_step_due", "next_step_time", "stage", "tasks", "unclear"],
   },
 };
 
@@ -85,6 +88,7 @@ export async function understandNote(input: { text: string; company: string; sta
     summary: String(v.summary ?? "").trim().slice(0, 600),
     next_step: v.next_step ? String(v.next_step).trim().slice(0, 160) : null,
     next_step_due: due,
+    next_step_time: due && typeof v.next_step_time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.next_step_time) ? v.next_step_time : null,
     stage,
     tasks: (Array.isArray(v.tasks) ? v.tasks : []).filter((t) => t && t.title).slice(0, 3).map((t) => ({ title: String(t.title).slice(0, 160), due_date: isDate(t.due_date) ? t.due_date : null })),
     unclear: v.unclear ? String(v.unclear).slice(0, 300) : (v.next_step && !due ? "Δεν κατάλαβα πότε είναι το επόμενο βήμα. Βάλε ημερομηνία." : null),
@@ -96,7 +100,7 @@ export type NewLeadFields = {
   company_name: string | null; contact_name: string | null; phone: string | null; email: string | null; area: string | null;
   source: "phone" | "site" | "facebook" | "seller" | "competition_watch" | null;
   interest: "radio" | "digital" | "both" | null; stations: string[];
-  next_step: string | null; next_step_due: string | null; notes: string | null;
+  next_step: string | null; next_step_due: string | null; next_step_time: string | null; notes: string | null;
 };
 
 const LEAD_SYSTEM = `Είσαι ο βοηθός πωλήσεων της Kartelias Media Group (ραδιόφωνα ΣΟΚ FM, DALKAS, ΜΠΛΕ, NRG στη Χαλκίδα, lalala.gr, social/digital).
@@ -107,7 +111,7 @@ const LEAD_SYSTEM = `Είσαι ο βοηθός πωλήσεων της Kartelia
 - area: περιοχή/διεύθυνση αν ειπώθηκε.
 - source: phone (μας πήρε τηλέφωνο), site (φόρμα/ιστοσελίδα), facebook (Facebook/Instagram), seller (το βρήκε ο ίδιος ο Account Executive: πέρασε, τον γνώρισε, του το σύστησαν), competition_watch (ακούστηκε να διαφημίζεται σε άλλον σταθμό). null αν δεν φαίνεται.
 - interest: radio, digital ή both, αν ειπώθηκε τι θέλει. stations: όσα από «ΣΟΚ FM», «DALKAS», «ΜΠΛΕ», «NRG», «lalala.gr», «Social» ειπώθηκαν.
-- next_step: η επόμενη κίνηση προς τον πελάτη. next_step_due: YYYY-MM-DD από τη σημερινή ημερομηνία που σου δίνω· null αν δεν ειπώθηκε πότε.
+- next_step: η επόμενη κίνηση προς τον πελάτη. next_step_due: YYYY-MM-DD από τη σημερινή ημερομηνία που σου δίνω· null αν δεν ειπώθηκε πότε. next_step_time: ώρα ΩΩ:ΛΛ (24ωρο) μόνο αν ειπώθηκε συγκεκριμένη ώρα, αλλιώς null.
 - notes: ό,τι άλλο χρήσιμο ειπώθηκε (τι θέλει, μπάτζετ, πότε, γιατί), σε 1–2 προτάσεις. Όχι επανάληψη των παραπάνω πεδίων.`;
 
 const LEAD_TOOL = {
@@ -120,9 +124,9 @@ const LEAD_TOOL = {
       source: { type: ["string", "null"], enum: ["phone", "site", "facebook", "seller", "competition_watch", null] },
       interest: { type: ["string", "null"], enum: ["radio", "digital", "both", null] },
       stations: { type: "array", items: { type: "string" } },
-      next_step: { type: ["string", "null"] }, next_step_due: { type: ["string", "null"] }, notes: { type: ["string", "null"] },
+      next_step: { type: ["string", "null"] }, next_step_due: { type: ["string", "null"] }, next_step_time: { type: ["string", "null"] }, notes: { type: ["string", "null"] },
     },
-    required: ["company_name", "contact_name", "phone", "email", "area", "source", "interest", "stations", "next_step", "next_step_due", "notes"],
+    required: ["company_name", "contact_name", "phone", "email", "area", "source", "interest", "stations", "next_step", "next_step_due", "next_step_time", "notes"],
   },
 };
 const STATION_SET = ["ΣΟΚ FM", "DALKAS", "ΜΠΛΕ", "NRG", "lalala.gr", "Social"];
@@ -159,6 +163,7 @@ export async function understandNewLead(text: string): Promise<NewLeadFields> {
     stations: (Array.isArray(v.stations) ? v.stations : []).filter((x) => STATION_SET.includes(x)),
     next_step: str(v.next_step, 160),
     next_step_due: isDate(v.next_step_due) && v.next_step_due >= today ? v.next_step_due : null,
+    next_step_time: typeof v.next_step_time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.next_step_time) ? v.next_step_time : null,
     notes: str(v.notes, 500),
   };
 }

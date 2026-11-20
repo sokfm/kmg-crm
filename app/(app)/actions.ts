@@ -10,6 +10,8 @@ const s = (f: FormData, k: string) => {
   const v = f.get(k);
   return v == null || String(v).trim() === "" ? null : String(v).trim();
 };
+// Ώρα ΩΩ:ΛΛ ή τίποτα
+const hhmm = (f: FormData, k: string) => { const v = String(f.get(k) ?? "").trim(); return /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : null; };
 // «1.500», «1500,50», «1.500 €» → αριθμός
 const money = (v: string | null) => {
   if (!v) return null;
@@ -33,7 +35,7 @@ export async function createLead(f: FormData) {
     if (dups && dups.length) {
       const d = dups[0] as { kind: string; ref_id: string; display_name: string; owner_name: string };
       const params: Record<string, string> = { dup_kind: d.kind, dup_id: d.ref_id, dup_name: d.display_name, dup_owner: d.owner_name };
-      for (const k of ["company_name", "contact_name", "phone", "email", "area", "source", "product_line", "market", "owner_id", "next_step", "next_step_due", "expected_value", "notes"]) {
+      for (const k of ["company_name", "contact_name", "phone", "email", "area", "source", "product_line", "market", "owner_id", "next_step", "next_step_due", "next_step_time", "expected_value", "notes"]) {
         const v = s(f, k);
         if (v) params[k] = v;
       }
@@ -76,6 +78,7 @@ export async function createLead(f: FormData) {
       stations: f.getAll("stations").map(String),
       next_step: s(f, "next_step"),
       next_step_due: s(f, "next_step_due"),
+      next_step_time: hhmm(f, "next_step_time"),
       notes: s(f, "notes"),
       owner_id: s(f, "owner_id"),
       expected_value: money(s(f, "expected_value")),
@@ -108,6 +111,7 @@ export async function updateLead(f: FormData) {
     status,
     next_step: s(f, "next_step"),
     next_step_due: s(f, "next_step_due"),
+    next_step_time: hhmm(f, "next_step_time"),
     contact_name: s(f, "contact_name"),
     phone: s(f, "phone"),
     email: s(f, "email"),
@@ -148,9 +152,11 @@ export async function moveLead(f: FormData) {
   if (status !== "won" && status !== "lost") {
     patch.next_step = s(f, "next_step");
     patch.next_step_due = s(f, "next_step_due");
+    patch.next_step_time = hhmm(f, "next_step_time");
   } else if (s(f, "next_step")) {
     patch.next_step = s(f, "next_step");
     patch.next_step_due = s(f, "next_step_due");
+    patch.next_step_time = hhmm(f, "next_step_time");
   }
   const { data, error } = await supabase.from("leads").update(patch).eq("id", id).eq("version", Number(s(f, "version"))).select("id");
   revalidatePath("/pipeline");
@@ -191,7 +197,7 @@ export async function addActivity(f: FormData) {
 
   // Μετά από κάθε επαφή, ορίζεται αμέσως το επόμενο βήμα του lead
   if (leadId && s(f, "next_step") && s(f, "next_step_due")) {
-    await supabase.from("leads").update({ next_step: s(f, "next_step"), next_step_due: s(f, "next_step_due") }).eq("id", leadId);
+    await supabase.from("leads").update({ next_step: s(f, "next_step"), next_step_due: s(f, "next_step_due"), next_step_time: hhmm(f, "next_step_time") }).eq("id", leadId);
   }
   revalidatePath(path);
   back(path, { ok: "activity" });
@@ -304,6 +310,7 @@ export async function createTask(f: FormData) {
     title,
     details: s(f, "details"),
     due_date: s(f, "due_date"),
+    due_time: s(f, "due_date") ? hhmm(f, "due_time") : null,
     owner_id: isAdmin ? s(f, "owner_id") ?? profile.id : profile.id,
     customer_id: s(f, "customer_id"),
     lead_id: s(f, "lead_id"),

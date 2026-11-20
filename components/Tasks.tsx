@@ -7,6 +7,7 @@ export type TaskRow = {
   id: string;
   title: string;
   due_date: string | null;
+  due_time?: string | null;
   status: string;
   source: string;
   customer_id: string | null;
@@ -19,7 +20,7 @@ export type TaskRow = {
 };
 
 export const TASK_SELECT =
-  "id, title, due_date, status, source, customer_id, lead_id, owner:profiles!tasks_owner_id_fkey(full_name), customers(display_name), leads(company_name), agency_id, agencies(name)";
+  "id, title, due_date, due_time, status, source, customer_id, lead_id, owner:profiles!tasks_owner_id_fkey(full_name), customers(display_name), leads(company_name), agency_id, agencies(name)";
 
 // Λίστα εργασιών με κουμπί ολοκλήρωσης. Χρησιμοποιείται στο Σήμερα, στις Εργασίες και στις καρτέλες.
 export function TaskList({ tasks, back, showOwner = false, showTarget = true }: { tasks: TaskRow[]; back: string; showOwner?: boolean; showTarget?: boolean }) {
@@ -55,7 +56,7 @@ export function TaskList({ tasks, back, showOwner = false, showTarget = true }: 
                 {k.source === "email" ? "από email" : "χειροκίνητη"}
               </div>
             </div>
-            <span className={`badge ${late ? "late" : "gray"}`}>{k.due_date ? dateGr(k.due_date) : "χωρίς ημ/νία"}</span>
+            <span className={`badge ${late ? "late" : "gray"}`}>{k.due_date ? dateGr(k.due_date) + (k.due_time ? ` · ${k.due_time.slice(0, 5)}` : "") : "χωρίς ημ/νία"}</span>
           </div>
         );
       })}
@@ -73,8 +74,9 @@ export function NewTaskForm({
       {customerId && <input type="hidden" name="customer_id" value={customerId} />}
       {leadId && <input type="hidden" name="lead_id" value={leadId} />}
       {agencyId && <input type="hidden" name="agency_id" value={agencyId} />}
-      <input name="title" className="grow" placeholder="Νέα εργασία, π.χ. Αποστολή πρότασης" required />
-      <input name="due_date" type="date" defaultValue={in2} />
+      <input name="title" className="grow" placeholder="Νέα εργασία ή υπενθύμιση, π.χ. Να δω το σποτ" required />
+      <input name="due_date" type="date" defaultValue={in2} aria-label="Ημερομηνία" />
+      <input name="due_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση στο κινητό" style={{ maxWidth: 120 }} />
       {people && people.length > 0 && (
         <select name="owner_id" defaultValue="" aria-label="Ανάθεση σε">
           <option value="">Για μένα</option>

@@ -43,7 +43,8 @@ export async function applyVoice(f: FormData) {
   if (!nextStep || !isDate(nextDue)) fail("Κάθε ανοιχτό lead θέλει επόμενο βήμα και ημερομηνία");
 
   // Πρώτα το lead (με έλεγχο έκδοσης), μετά η επαφή: αν κάποιος άλλος το άλλαξε στο μεταξύ, δεν γράφεται τίποτα
-  const patch: Record<string, unknown> = { next_step: nextStep, next_step_due: nextDue };
+  const tm = String(f.get("next_step_time") ?? "").trim();
+  const patch: Record<string, unknown> = { next_step: nextStep, next_step_due: nextDue, next_step_time: /^([01]\d|2[0-3]):[0-5]\d$/.test(tm) ? tm : null };
   const stage = s(f, "stage");
   if (stage && OPEN.includes(stage)) patch.status = stage;
   const { data, error } = await supabase.from("leads").update(patch).eq("id", leadId).eq("version", Number(s(f, "version"))).select("id");
@@ -74,7 +75,7 @@ export async function interpretNewLead(text: string): Promise<{ ok: true; query:
     const q = new URLSearchParams({ voice: "1" });
     const put = (k: string, x: string | null) => { if (x) q.set(k, x); };
     put("company_name", v.company_name); put("contact_name", v.contact_name); put("phone", v.phone); put("email", v.email); put("area", v.area);
-    put("source", v.source); put("product_line", v.interest); put("next_step", v.next_step); put("next_step_due", v.next_step_due); put("notes", v.notes);
+    put("source", v.source); put("product_line", v.interest); put("next_step", v.next_step); put("next_step_due", v.next_step_due); put("next_step_time", v.next_step_time); put("notes", v.notes);
     if (v.stations.length) q.set("stations", v.stations.join(","));
     const missing = [!v.phone && "τηλέφωνο", !v.next_step && "επόμενο βήμα", !v.next_step_due && "ημερομηνία επόμενου βήματος"].filter(Boolean) as string[];
     if (missing.length) q.set("missing", missing.join(", "));

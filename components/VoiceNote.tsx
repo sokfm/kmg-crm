@@ -42,7 +42,7 @@ export function VoiceNote({ leadId, version, stage, today }: { leadId: string; v
         <label>Τι έγινε<textarea name="summary" defaultValue={res.summary} rows={3} required maxLength={600} style={{ width: "100%" }} /></label>
         <div className="grid2">
           <label>Επόμενο βήμα<input name="next_step" defaultValue={res.next_step ?? ""} required maxLength={160} /></label>
-          <label>Πότε<input type="date" name="next_step_due" defaultValue={res.next_step_due ?? ""} min={today} required /></label>
+          <label>Πότε<span className="row" style={{ gap: 6 }}><input type="date" name="next_step_due" defaultValue={res.next_step_due ?? ""} min={today} required /><input name="next_step_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση" style={{ maxWidth: 120 }} defaultValue={res.next_step_time ?? ""} /></span></label>
         </div>
         {res.tasks.length > 0 && (
           <div className="stack">

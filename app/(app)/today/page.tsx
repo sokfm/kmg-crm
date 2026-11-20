@@ -5,7 +5,7 @@ import { completeTask } from "../actions";
 import { fetchRevenue, sumRev } from "@/lib/revenue";
 
 type Lead = { id: string; company_name: string; status: string; next_step: string; next_step_due: string; phone: string | null; is_overdue: boolean; is_today: boolean };
-type Task = { id: string; title: string; due_date: string | null; customer_id: string | null; lead_id: string | null; agency_id: string | null; customers: { display_name: string } | null; leads: { company_name: string; phone: string | null } | null; agencies: { name: string } | null };
+type Task = { id: string; title: string; due_date: string | null; due_time: string | null; customer_id: string | null; lead_id: string | null; agency_id: string | null; customers: { display_name: string } | null; leads: { company_name: string; phone: string | null } | null; agencies: { name: string } | null };
 type Item = { key: string; kind: "lead" | "task"; id: string; name: string; sub: string; chip: string; date: string | null; late: boolean; phone: string | null; href: string };
 
 const MONTHS = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"];
@@ -26,21 +26,30 @@ export default async function Today({ searchParams }: { searchParams: Promise<Re
 
   const [{ data: myLeads }, { data: myTasks }, { data: openLeads }, { data: review }] = await Promise.all([
     supabase.from("my_today").select("id, company_name, status, next_step, next_step_due, phone, is_overdue, is_today").order("next_step_due"),
-    supabase.from("tasks").select("id, title, due_date, customer_id, lead_id, agency_id, customers(display_name), leads(company_name, phone), agencies(name)")
+    supabase.from("tasks").select("id, title, due_date, due_time, customer_id, lead_id, agency_id, customers(display_name), leads(company_name, phone), agencies(name)")
       .eq("owner_id", profile.id).eq("status", "open").lte("due_date", tomorrow).order("due_date"),
     supabase.from("leads").select("id, status, owner_id, next_step_due").not("status", "in", "(won,lost)"),
     supabase.from("email_messages").select("id, subject, counterpart_name, counterpart_email, ai_kind").eq("status", "review").order("occurred_at", { ascending: false }).limit(2),
   ]);
 
+  // Ώρες επόμενων βημάτων και αν ο χρήστης έχει ανάψει ειδοποιήσεις σε κάποια συσκευή
+  const leadIds = ((myLeads ?? []) as Lead[]).map((l) => l.id);
+  const [{ data: timeRows }, { count: devices }] = await Promise.all([
+    leadIds.length ? supabase.from("leads").select("id, next_step_time").in("id", leadIds).not("next_step_time", "is", null) : Promise.resolve({ data: [] as { id: string; next_step_time: string }[] }),
+    supabase.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", profile.id),
+  ]);
+  const times = new Map((timeRows ?? []).map((r) => [r.id as string, String(r.next_step_time).slice(0, 5)]));
+  const at = (tm: string | null | undefined, text: string) => (tm ? `${tm.slice(0, 5)} · ${text}` : text);
+
   const items: Item[] = [
     ...((myLeads ?? []) as Lead[]).map((l) => ({
-      key: "l" + l.id, kind: "lead" as const, id: l.id, name: l.company_name, sub: l.next_step, chip: STAGES[l.status]?.replace(/^\d\.\s*/, "") ?? "",
+      key: "l" + l.id, kind: "lead" as const, id: l.id, name: l.company_name, sub: at(times.get(l.id), l.next_step), chip: STAGES[l.status]?.replace(/^\d\.\s*/, "") ?? "",
       date: l.next_step_due, late: l.is_overdue, phone: l.phone, href: `/leads/${l.id}`,
     })),
     ...((myTasks ?? []) as unknown as Task[]).map((k) => ({
       key: "t" + k.id, kind: "task" as const, id: k.id,
       name: k.customers?.display_name ?? k.leads?.company_name ?? (k.agencies ? `${k.agencies.name} (media shop)` : "Εργασία"),
-      sub: k.title, chip: "Εργασία", date: k.due_date, late: !!k.due_date && k.due_date < t, phone: k.leads?.phone ?? null,
+      sub: at(k.due_time, k.title), chip: "Εργασία", date: k.due_date, late: !!k.due_date && k.due_date < t, phone: k.leads?.phone ?? null,
       href: k.customer_id ? `/customers/${k.customer_id}` : k.lead_id ? `/leads/${k.lead_id}` : k.agency_id ? `/agencies/${k.agency_id}` : "/tasks",
     })),
   ].sort((a, b) => (a.date ?? "9").localeCompare(b.date ?? "9"));
@@ -126,6 +135,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<Re
         <Link href="/pipeline" className="btn secondary">Pipeline</Link>
         <Link href="/leads/new" className="btn">+ Νέο lead</Link>
       </div>
+
+      {(devices ?? 0) === 0 && (
+        <Link href="/settings#push" className="msg" style={{ display: "block", background: "var(--orange-bg)", color: "inherit" }}>
+          🔔 <strong>Άναψε τις υπενθυμίσεις στο κινητό σου</strong> για να μη χάνεις επόμενα βήματα και εργασίες. Ένα πάτημα →
+        </Link>
+      )}
 
       <div className="kpis">
         {isAdmin ? (

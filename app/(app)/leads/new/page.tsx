@@ -104,7 +104,7 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
         </fieldset>
         <div className="grid2">
           <label>Επόμενο βήμα *<input name="next_step" required defaultValue={sp.next_step} placeholder="π.χ. Τηλέφωνο για ραντεβού" /></label>
-          <label>Πότε *<input name="next_step_due" type="date" required defaultValue={sp.next_step_due ?? tomorrow} /></label>
+          <label>Πότε *<span className="row" style={{ gap: 6 }}><input name="next_step_due" type="date" required defaultValue={sp.next_step_due ?? tomorrow} /><input name="next_step_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση" style={{ maxWidth: 120 }} defaultValue={sp.next_step_time ?? ""} /></span></label>
         </div>
         <label>Εκτιμώμενη αξία (€, αν την ξέρεις)<input name="expected_value" inputMode="decimal" placeholder="π.χ. 1.500" defaultValue={sp.expected_value} /></label>
         <label>Σημειώσεις<textarea name="notes" defaultValue={sp.notes} /></label>

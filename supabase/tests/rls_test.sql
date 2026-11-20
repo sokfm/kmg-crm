@@ -544,4 +544,31 @@ do $$ begin
 end $$;
 reset role;
 
+-- 30. Υπενθυμίσεις: ανάθεση μόνο από Νίκο/Γιάννα, ειδοποίηση μία φορά, μόνο ο server τις παράγει
+select as_user(3);
+insert into tasks (id, title, due_date, due_time, owner_id) values ('f0000000-0000-0000-0000-000000000001', 'Να πάρω τον πελάτη',
+  (now() at time zone 'Europe/Athens')::date, ((now() at time zone 'Europe/Athens') + interval '5 minutes')::time, '00000000-0000-0000-0000-000000000003');
+do $$ begin
+  begin insert into tasks (title, owner_id) values ('για άλλον', '00000000-0000-0000-0000-000000000004'); assert false, 'ο Κώστας ανέθεσε σε άλλον';
+  exception when insufficient_privilege then null; end;
+  begin perform make_reminders(); assert false, 'χρήστης έτρεξε τις υπενθυμίσεις';
+  exception when insufficient_privilege then null; end;
+  begin perform 1 from app_secrets; assert false, 'χρήστης διάβασε κλειδιά συστήματος';
+  exception when insufficient_privilege then null; end;
+end $$;
+select as_user(2);
+insert into tasks (title, owner_id) values ('από τη Γιάννα', '00000000-0000-0000-0000-000000000003');
+reset role;
+do $$ declare a int; b int; begin
+  -- κοντά στα μεσάνυχτα η ώρα +5' πέφτει στην επόμενη μέρα· τότε απλώς δεν ελέγχεται η ώρα
+  if (now() at time zone 'Europe/Athens')::time < time '23:50' then
+    perform make_reminders();
+    select count(*) into a from notifications where kind = 'reminder' and user_id = '00000000-0000-0000-0000-000000000003' and title like '⏰ %Να πάρω τον πελάτη%';
+    assert a = 1, 'δεν βγήκε υπενθύμιση εργασίας: ' || a;
+    perform make_reminders();
+    select count(*) into b from notifications where kind = 'reminder' and user_id = '00000000-0000-0000-0000-000000000003';
+    assert b = a, 'η υπενθύμιση βγήκε δεύτερη φορά';
+  end if;
+end $$;
+
 select 'ALL TESTS PASSED' as result;

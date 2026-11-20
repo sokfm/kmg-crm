@@ -145,7 +145,7 @@ export default async function LeadPage({
                 {!closed && (
                   <div className="grid2">
                     <label>Επόμενο βήμα<input name="next_step" placeholder={lead.next_step ?? "π.χ. Στέλνω πρόταση"} /></label>
-                    <label>Πότε<input name="next_step_due" type="date" defaultValue={in3} /></label>
+                    <label>Πότε<span className="row" style={{ gap: 6 }}><input name="next_step_due" type="date" defaultValue={in3} /><input name="next_step_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση" style={{ maxWidth: 120 }} defaultValue="" /></span></label>
                   </div>
                 )}
                 <div className="row">
@@ -163,7 +163,7 @@ export default async function LeadPage({
                       <strong>{lead.next_step ?? "Χωρίς επόμενο βήμα"}</strong>
                       <div className="muted">Επόμενο βήμα{late ? " · καθυστερεί" : ""}</div>
                     </div>
-                    <span className={`badge ${late ? "late" : ""}`}>{dateGr(lead.next_step_due)}</span>
+                    <span className={`badge ${late ? "late" : ""}`}>{dateGr(lead.next_step_due)}{lead.next_step_time ? ` · ${(lead.next_step_time as string).slice(0, 5)}` : ""}</span>
                   </div>
                 )}
                 <TaskList tasks={openTasks} back={`/leads/${lead.id}`} showTarget={false} showOwner />
@@ -221,7 +221,7 @@ export default async function LeadPage({
                   </select>
                 </label>
                 <label>Επόμενο βήμα<input name="next_step" defaultValue={lead.next_step ?? ""} /></label>
-                <label>Πότε<input name="next_step_due" type="date" defaultValue={lead.next_step_due ?? ""} /></label>
+                <label>Πότε<span className="row" style={{ gap: 6 }}><input name="next_step_due" type="date" defaultValue={lead.next_step_due ?? ""} /><input name="next_step_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση" style={{ maxWidth: 120 }} defaultValue={(lead.next_step_time as string | null)?.slice(0, 5) ?? ""} /></span></label>
               </div>
               <label>Γιατί χάθηκε (με δικά σου λόγια)<input name="lost_reason" defaultValue={lead.lost_reason ?? ""} /></label>
               <label>Σημειώσεις<textarea name="notes" defaultValue={lead.notes ?? ""} /></label>

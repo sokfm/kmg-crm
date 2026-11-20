@@ -55,7 +55,7 @@ export function MoveDialog({ card, to: initial, today, back, onClose }: { card: 
           <>
             <div className="grid2">
               <label>Επόμενο βήμα *<input name="next_step" required defaultValue={card.next_step ?? ""} placeholder="π.χ. Στέλνω πρόταση" /></label>
-              <label>Πότε *<input name="next_step_due" type="date" required defaultValue={card.next_step_due && card.next_step_due >= today ? card.next_step_due : plus(2)} /></label>
+              <label>Πότε *<span className="row" style={{ gap: 6 }}><input name="next_step_due" type="date" required defaultValue={card.next_step_due && card.next_step_due >= today ? card.next_step_due : plus(2)} /><input name="next_step_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση" style={{ maxWidth: 120 }} defaultValue="" /></span></label>
             </div>
             <label>Εκτιμώμενη αξία (€)<input name="expected_value" inputMode="decimal" defaultValue={card.expected_value ?? ""} placeholder="π.χ. 1.500" /></label>
           </>
