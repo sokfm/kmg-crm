@@ -42,17 +42,28 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Πρόβλεψη τζίρου από τις κύριες προτάσεις: κλεισμένα (κερδισμένα leads) και ανοιχτά (ακόμα στο pipeline), ξεχωριστά
   const [{ data: mainProps }, { data: propTotals }] = await Promise.all([
-    supabase.from("proposals").select("id, leads!inner(status), proposal_items(monthly_amount, long_months, long_amount, months, start_date, confirmed_start)").eq("is_main", true),
+    supabase.from("proposals").select("id, lead_id, leads!inner(status), proposal_items(monthly_amount, long_months, long_amount, months, start_date, confirmed_start)").eq("is_main", true),
     supabase.from("proposal_totals").select("proposal_id, final_total"),
   ]);
+  // Τιμολόγηση από το Excel: πότε διαβάστηκε τελευταία, τι περιμένει απάντηση, και ποια κερδισμένα leads υπάρχουν ήδη στο Excel
+  const [{ data: billLog }, { count: billNames }, { data: billHints }, { data: billed }] = await Promise.all([
+    supabase.from("billing_sync_log").select("ran_at, ok").order("ran_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("billing_names").select("name_key", { count: "exact", head: true }).is("customer_id", null),
+    supabase.from("history_lines").select("customer_id, lead_hint").not("lead_hint", "is", null).is("origin", null).eq("source_scope", "monthly_billing"),
+    supabase.from("history_lines").select("lead_id").not("lead_id", "is", null).eq("source_scope", "monthly_billing"),
+  ]);
+  const billedLeads = new Set((billed ?? []).map((x) => x.lead_id as string));
+  const billQuestions = (billNames ?? 0) + new Set((billHints ?? []).map((x) => `${x.customer_id}|${x.lead_hint}`)).size;
   const finalOf = new Map((propTotals ?? []).map((x) => [x.proposal_id as string, Number(x.final_total)]));
   const fMonths = Array.from({ length: 6 }, (_, i) => { const d = new Date(Date.UTC(nowY, nowM - 1 + i, 1)); return d.toISOString().slice(0, 7); });
   const fc = new Map(fMonths.map((ym) => [ym, { won: 0, open: 0 }]));
   const fcUndated = { won: 0, open: 0 }, fcLater = { won: 0, open: 0 };
   let wonUnconfirmed = 0;
-  for (const p of (mainProps ?? []) as unknown as { id: string; leads: { status: string }; proposal_items: FItem[] }[]) {
+  for (const p of (mainProps ?? []) as unknown as { id: string; lead_id: string; leads: { status: string }; proposal_items: FItem[] }[]) {
     const st = p.leads?.status;
     if (st === "lost" || !p.proposal_items?.length) continue;
+    // Κερδισμένο που έχει ήδη γραμμές στο Excel: μετράει ο πραγματικός τζίρος, όχι η πρόβλεψη (αλλιώς τα ίδια λεφτά δύο φορές)
+    if (st === "won" && billedLeads.has(p.lead_id)) continue;
     const k = st === "won" ? "won" : "open";
     const r = proposalByMonth(p.proposal_items, finalOf.get(p.id) ?? 0, { open: k === "open", today: t });
     fcUndated[k] += r.undated;
@@ -163,6 +174,23 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <Link href="/pipeline" className="muted">εκτιμώμενη αξία {eur(pipeValue)} ›</Link>
         </div>
       </div>
+
+      {Y === nowY && (
+        <div className="card">
+          <div className="row">
+            <div className="grow">
+              <div className="muted">{MONTHS_FULL[nowM - 1]}: από πού ήρθε ο τζίρος</div>
+              <div><strong>{eur(sum((r) => r.year === Y && r.month === nowM && r.from_lead))}</strong> από leads του CRM · <strong>{eur(sum((r) => r.year === Y && r.month === nowM && !r.from_lead))}</strong> εκτός CRM</div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                Εκτός CRM = εντολές πρακτορείων, ανανεώσεις και ό,τι μπήκε στο Excel χωρίς lead.
+                {" "}Excel: {billLog ? `τελευταία ενημέρωση ${new Intl.DateTimeFormat("el-GR", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Athens" }).format(new Date(billLog.ran_at))}` : "δεν έχει διαβαστεί ακόμα από το Dropbox"}
+                {billLog && !billLog.ok && <span className="late-txt"> · κάτι δεν διαβάστηκε</span>}
+              </div>
+            </div>
+            <Link href="/billing" className={`badge ${billQuestions ? "late" : "gray"}`}>{billQuestions ? `${billQuestions} ερωτήσεις ›` : "Τιμολόγηση ›"}</Link>
+          </div>
+        </div>
+      )}
 
       {Y === nowY && hasForecast && (
         <div className="card">

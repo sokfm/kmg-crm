@@ -340,3 +340,8 @@ a.kpi-card:hover { border-color: #f0b9e7; }
 .chip { background: #fff; color: var(--ink); border: 1px solid #dcd8e1; border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; min-height: 34px; }
 .chip.on { background: var(--brand); border-color: var(--brand); color: #0b0a0d; }
 .card.warn { background: #fff8ec; border-color: #f3d19c; }
+
+/* Τιμολόγηση από το Excel: επιλογές «ποιος πελάτης είναι» */
+.pick { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-weight: 400; padding: 8px 10px; border: 1px solid #ebe8ef; border-radius: 10px; cursor: pointer; }
+.pick input { width: auto; margin: 0; }
+.pick:has(input:checked) { border-color: var(--blue); background: var(--brand-bg); }

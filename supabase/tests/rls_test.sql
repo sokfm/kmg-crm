@@ -812,4 +812,105 @@ do $$ declare n int; begin
   end if;
 end $$;
 
+-- 41. Τιμολόγηση από το Excel: ίδιες γραμμές μένουν, νέες μπαίνουν, όσες έφυγαν βγαίνουν από τα αθροίσματα,
+--     άγνωστο όνομα = ερώτηση (ποτέ νέος πελάτης μόνος του), ετικέτα «από lead» / «εκτός CRM», δικλείδα για μισό φύλλο
+reset role;
+insert into customers (id, display_name, status) values
+ ('b1000000-0000-0000-0000-000000000001','ΦΟΥΡΝΟΣ ΤΕΣΤ','base'),
+ ('b1000000-0000-0000-0000-000000000002','ΚΑΦΕ ΛΟΓΑΡΙΑΣΜΟΣ','base');
+insert into history_lines (record_id, source_customer_id, customer_id, customer_name_raw, period, billing_year, billing_month, station, amount, amount_type, bico_raw) values
+ ('T41_1','CU_T1','b1000000-0000-0000-0000-000000000001','ΦΟΥΡΝΟΣ ΤΕΣΤ ','2031-03',2031,3,'ΣΟΚ',400,'numeric','900'),
+ ('T41_2','CU_T1','b1000000-0000-0000-0000-000000000001','ΦΟΥΡΝΟΣ ΤΕΣΤ','2031-03',2031,3,'NRG',100,'numeric','900'),
+ ('T41_3','CU_T1','b1000000-0000-0000-0000-000000000001','ΦΟΥΡΝΟΣ ΤΕΣΤ','2031-03',2031,3,'DALKAS',null,'FREE','901'),
+ ('T41_4','CU_T2','b1000000-0000-0000-0000-000000000002','ΚΑΦΕ ΛΟΓΑΡΙΑΣΜΟΣ','2031-03',2031,3,'ΣΟΚ',250,'numeric',null);
+insert into leads (id, company_name, owner_id, status, closed_at, customer_id) values
+ ('b2000000-0000-0000-0000-000000000001','Καφέ Λογαριασμός','00000000-0000-0000-0000-000000000003','won','2031-03-10','b1000000-0000-0000-0000-000000000002');
+update leads set closed_at = '2031-03-10' where id = 'b2000000-0000-0000-0000-000000000001';
+do $$ declare j jsonb; c uuid; n int; begin
+  -- α) το ίδιο αρχείο: τίποτα δεν αλλάζει
+  j := apply_billing_month(2031, 3, '[
+    {"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"ΣΟΚ","bico":"900","amount":400,"amount_type":"numeric"},
+    {"name":"Φούρνος Τεστ","station":"NRG","bico":"900","amount":100,"amount_type":"numeric"},
+    {"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"DALKAS","bico":"901","amount":null,"amount_type":"FREE"},
+    {"name":"ΚΑΦΕ ΛΟΓΑΡΙΑΣΜΟΣ","station":"ΣΟΚ","bico":null,"amount":250,"amount_type":"numeric"}]'::jsonb);
+  assert (j ->> 'same')::int = 4 and (j ->> 'added')::int = 0 and (j ->> 'removed')::int = 0 and (j ->> 'changed')::int = 0, 'ίδιο αρχείο, αλλά βρήκε αλλαγές: ' || j;
+  -- β) δοκιμαστικά: μετράει χωρίς να αλλάξει τίποτα
+  j := apply_billing_month(2031, 3, '[{"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"ΣΟΚ","bico":"900","amount":400,"amount_type":"numeric"},
+    {"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"NRG","bico":"900","amount":100,"amount_type":"numeric"},
+    {"name":"ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ","station":"ΣΟΚ","bico":"950","amount":300,"amount_type":"numeric"}]'::jsonb, true);
+  assert (j ->> 'added')::int = 1 and (j ->> 'removed')::int = 2 and (j ->> 'names')::int = 1, 'λάθος δοκιμαστικό μέτρημα: ' || j;
+  assert (select count(*) from history_lines where billing_year = 2031 and source_scope = 'monthly_billing') = 4, 'το δοκιμαστικό άλλαξε γραμμές';
+  assert not exists (select 1 from billing_names where source_name = 'ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ'), 'το δοκιμαστικό έγραψε ερώτηση';
+  -- γ) αλλαγή ποσού (ίδιο BICO), BICO σε γραμμή που δεν είχε, μία γραμμή έφυγε, δύο νέες (άγνωστο όνομα + γνωστός με κερδισμένο lead)
+  j := apply_billing_month(2031, 3, '[
+    {"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"ΣΟΚ","bico":"900","amount":450,"amount_type":"numeric","ae":"STAMOULAKIS"},
+    {"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"NRG","bico":"900","amount":100,"amount_type":"numeric"},
+    {"name":"ΚΑΦΕ ΛΟΓΑΡΙΑΣΜΟΣ","station":"ΣΟΚ","bico":"960","amount":250,"amount_type":"numeric"},
+    {"name":"ΚΑΦΕ ΛΟΓΑΡΙΑΣΜΟΣ","station":"NRG","bico":"961","amount":80,"amount_type":"numeric","start":"2031-03-15","end":"2031-03-31"},
+    {"name":"ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ","station":"ΣΟΚ","bico":"950","amount":300,"amount_type":"numeric"}]'::jsonb);
+  assert (j ->> 'same')::int = 1 and (j ->> 'changed')::int = 2 and (j ->> 'added')::int = 2 and (j ->> 'removed')::int = 1, 'λάθος σύγκριση: ' || j;
+  assert (select amount from history_lines where record_id = 'T41_1') = 450, 'δεν πέρασε το νέο ποσό';
+  assert (select bico_raw from history_lines where record_id = 'T41_4') = '960', 'δεν πέρασε το BICO στη γραμμή που δεν είχε';
+  assert (select source_scope = 'removed_from_file' and removed_at is not null from history_lines where record_id = 'T41_3'), 'η γραμμή που έφυγε δεν βγήκε από τα αθροίσματα';
+  assert (select sum(amount) from history_lines where billing_year = 2031 and source_scope = 'monthly_billing') = 1180, 'το σύνολο του μήνα δεν είναι όσο το αρχείο';
+  assert (select lifetime_revenue from customers where id = 'b1000000-0000-0000-0000-000000000001') = 0, 'μελλοντικός μήνας μέτρησε στο σύνολο πελάτη';
+  -- άγνωστο όνομα: ερώτηση, γραμμή χωρίς πελάτη, ΚΑΝΕΝΑΣ νέος πελάτης
+  assert (select customer_id is null from billing_names where source_name = 'ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ'), 'δεν έγινε ερώτηση για το άγνωστο όνομα';
+  assert (select customer_id is null and added_at is not null from history_lines where customer_name_raw = 'ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ'), 'η γραμμή του άγνωστου πήρε πελάτη';
+  assert not exists (select 1 from customers where display_name ilike 'ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ%'), 'άνοιξε νέος πελάτης χωρίς ερώτηση';
+  -- γνωστός πελάτης με κερδισμένο lead κοντά: ερώτηση «από αυτό το lead;», όχι ετικέτα μόνη της
+  assert (select lead_hint = 'b2000000-0000-0000-0000-000000000001' and origin is null from history_lines where bico_raw = '961'), 'δεν πρότεινε το κερδισμένο lead';
+  -- οι παλιές γραμμές δεν παίρνουν ετικέτα
+  assert (select origin is null and lead_hint is null from history_lines where record_id = 'T41_4'), 'παλιά γραμμή πήρε ετικέτα';
+  -- δ) δεύτερη φορά το ίδιο: τίποτα
+  j := apply_billing_month(2031, 3, '[
+    {"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"ΣΟΚ","bico":"900","amount":450,"amount_type":"numeric","ae":"STAMOULAKIS"},
+    {"name":"ΦΟΥΡΝΟΣ ΤΕΣΤ","station":"NRG","bico":"900","amount":100,"amount_type":"numeric"},
+    {"name":"ΚΑΦΕ ΛΟΓΑΡΙΑΣΜΟΣ","station":"ΣΟΚ","bico":"960","amount":250,"amount_type":"numeric"},
+    {"name":"ΚΑΦΕ ΛΟΓΑΡΙΑΣΜΟΣ","station":"NRG","bico":"961","amount":80,"amount_type":"numeric","start":"2031-03-15","end":"2031-03-31"},
+    {"name":"ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ","station":"ΣΟΚ","bico":"950","amount":300,"amount_type":"numeric"}]'::jsonb);
+  assert (j ->> 'same')::int = 5 and (j ->> 'added')::int = 0 and (j ->> 'removed')::int = 0, 'η δεύτερη ανάγνωση ξαναέβαλε γραμμές: ' || j;
+  -- ε) δικλείδα: άδειο φύλλο δεν σβήνει μήνα
+  j := apply_billing_month(2031, 3, '[]'::jsonb);
+  assert (j ->> 'skipped')::boolean, 'άδειο φύλλο δεν σταμάτησε';
+  assert (select count(*) from history_lines where billing_year = 2031 and source_scope = 'monthly_billing') = 5, 'άδειο φύλλο έσβησε τον μήνα';
+  perform finish_billing_sync('{"added": 2, "skipped": 0}'::jsonb);
+  assert (select count(*) from notifications where kind = 'billing' and user_id = '00000000-0000-0000-0000-000000000001') = 1, 'ο Νίκος δεν ειδοποιήθηκε για τις ερωτήσεις';
+  assert (select count(*) from notifications where kind = 'billing' and user_id <> '00000000-0000-0000-0000-000000000001') = 0, 'ειδοποιήθηκε και άλλος';
+end $$;
+-- Account Executive: ούτε απαντά ούτε βλέπει τις γραμμές χωρίς πελάτη ή τις ερωτήσεις
+select as_user(3);
+do $$ begin
+  assert (select count(*) from billing_names) = 0, 'Account Executive βλέπει τις ερωτήσεις τιμολόγησης';
+  assert (select count(*) from history_lines where customer_id is null) = 0, 'Account Executive βλέπει γραμμές χωρίς πελάτη';
+  assert (select count(*) from won_not_billed) = 0, 'Account Executive βλέπει τα «κλείστηκε αλλά δεν τιμολογήθηκε»';
+  begin perform answer_billing_name(gr_key('ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ'), null, true); raise exception 'NOPE';
+  exception when others then if sqlerrm = 'NOPE' then raise exception 'Account Executive απάντησε σε ερώτηση τιμολόγησης'; end if; end;
+  begin perform apply_billing_month(2031, 4, '[]'::jsonb); raise exception 'NOPE';
+  exception when others then if sqlerrm = 'NOPE' then raise exception 'Account Executive έτρεξε τον συγχρονισμό'; end if; end;
+end $$;
+-- Ο Νίκος απαντά: «Νέος πελάτης» και «ναι, από αυτό το lead»
+select as_user(1);
+do $$ declare c uuid; n int; begin
+  assert (select count(*) from history_lines where customer_id is null and billing_year = 2031) = 1, 'ο Νίκος δεν βλέπει τη γραμμή χωρίς πελάτη';
+  assert (select sum(amount) from revenue_monthly where year = 2031 and month = 3) = 1180, 'η γραμμή χωρίς πελάτη δεν μετράει στον τζίρο';
+  assert exists (select 1 from billing_name_suggestions(gr_key('ΦΟΥΡΝΟΣ ΤΕΣΤ ΑΕ')) where display_name = 'ΦΟΥΡΝΟΣ ΤΕΣΤ'), 'δεν πρότεινε τον πελάτη που μοιάζει';
+  c := answer_billing_name(gr_key('ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ'), null, true);
+  assert (select display_name from customers where id = c) = 'ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ', 'λάθος όνομα νέου πελάτη';
+  assert (select customer_id = c and origin = 'direct' from history_lines where bico_raw = '950'), 'η γραμμή δεν πήγε στον νέο πελάτη ως «εκτός CRM»';
+  begin perform answer_billing_name(gr_key('ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ'), null, true); raise exception 'NOPE';
+  exception when others then if sqlerrm = 'NOPE' then raise exception 'η ίδια ερώτηση απαντήθηκε δύο φορές'; end if; end;
+  n := answer_billing_lead('b1000000-0000-0000-0000-000000000002', 'b2000000-0000-0000-0000-000000000001', true);
+  assert n = 1, 'περίμενα 1 γραμμή «από lead», πήρα ' || n;
+  assert (select origin = 'lead' and lead_id = 'b2000000-0000-0000-0000-000000000001' from history_lines where bico_raw = '961'), 'η γραμμή δεν δέθηκε με το lead';
+  assert (select sum(amount) from revenue_monthly where year = 2031 and month = 3 and from_lead) = 80, 'λάθος «από leads» στο dashboard';
+end $$;
+reset role;
+do $$ declare j jsonb; begin
+  -- το όνομα που απαντήθηκε δεν ξαναρωτιέται: νέα γραμμή πάει κατευθείαν στον πελάτη
+  j := apply_billing_month(2031, 4, '[{"name":"Καινούργιο Μαγαζί & ΣΙΑ","station":"NRG","bico":"970","amount":120,"amount_type":"numeric"}]'::jsonb);
+  assert (j ->> 'added')::int = 1 and (j ->> 'names')::int = 0, 'ξαναρώτησε για όνομα που έχει απαντηθεί: ' || j;
+  assert (select h.customer_id = b.customer_id from history_lines h, billing_names b where h.bico_raw = '970' and b.source_name = 'ΚΑΙΝΟΥΡΓΙΟ ΜΑΓΑΖΙ & ΣΙΑ'), 'η νέα γραμμή δεν πήγε στον πελάτη που απαντήθηκε';
+end $$;
+
 select 'ALL TESTS PASSED' as result;

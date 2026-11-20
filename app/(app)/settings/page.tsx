@@ -7,6 +7,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { vapid } from "@/lib/push";
 import { disconnectOutlook, setPassword, syncMailNow } from "../actions";
 import { saveOfferContact } from "../proposal-actions";
+import { saveBillingLinks } from "../billing-actions";
+import { billingLinks } from "@/lib/billing/sync";
 
 export const maxDuration = 300;
 
@@ -15,11 +17,14 @@ const fmt = (d: string | null) =>
 
 export default async function Settings({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
-  const { supabase, profile, isAdmin } = await requireProfile();
+  const { supabase, profile, isAdmin, isCeo } = await requireProfile();
   const tab = isAdmin && sp.tab === "pricing" ? "pricing" : "general";
   const { data: acc } = await supabase.from("my_mail_account").select("*").maybeSingle();
   const { data: offer } = await supabase.from("profiles").select("offer_name, offer_phone").eq("id", profile.id).maybeSingle();
   const { count: devices } = await supabase.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", profile.id);
+  // Πόσοι σύνδεσμοι τιμολόγησης έχουν μπει (οι ίδιοι οι σύνδεσμοι δεν φτάνουν ποτέ στην οθόνη)
+  let nBillLinks = 0;
+  if (isCeo) { try { nBillLinks = (await billingLinks(supabaseAdmin())).length; } catch { nBillLinks = 0; } }
   let pushKey: string | null = null;
   try { pushKey = (await vapid(supabaseAdmin())).publicKey; } catch { pushKey = null; }
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -75,6 +80,24 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </div>
         <div><SubmitButton pending="Αποθήκευση…">Αποθήκευση κωδικού</SubmitButton></div>
       </form>
+
+      {isCeo && (
+        <form action={saveBillingLinks} className="card stack" id="billing">
+          <h2 style={{ margin: 0 }}>Τιμολόγηση από Dropbox</h2>
+          <p className="muted" style={{ margin: 0 }}>
+            Το CRM διαβάζει κάθε βράδυ τα Excel «ΤΙΜΟΛΟΓΗΣΗ 2026» και «ΤΙΜΟΛΟΓΗΣΗ 2027» και φέρνει τον τζίρο στα ίδια με το αρχείο.
+            Στο Dropbox: δεξί κλικ στο αρχείο → Κοινή χρήση → Αντιγραφή συνδέσμου («όποιος έχει τον σύνδεσμο μπορεί να δει»). Κόλλησε εδώ έναν σύνδεσμο ανά γραμμή.
+            Κάθε νέα χρονιά προσθέτεις τον σύνδεσμο του νέου αρχείου.
+          </p>
+          <div>{nBillLinks ? <>✅ Έχουν οριστεί <strong>{nBillLinks}</strong> αρχεία. Για αλλαγή, κόλλησε ξανά ΟΛΟΥΣ τους συνδέσμους.</> : <span className="late-txt">Δεν έχει οριστεί κανένα αρχείο ακόμα.</span>}</div>
+          <label>Σύνδεσμοι Dropbox<textarea name="links" rows={3} placeholder="https://www.dropbox.com/scl/fi/…" autoComplete="off" required /></label>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>Ο σύνδεσμος δίνει ανάγνωση του αρχείου σε όποιον τον έχει. Μένει κλειδωμένος στο CRM και δεν ξαναδείχνεται· μην τον στέλνεις αλλού.</p>
+          <div className="row">
+            <SubmitButton pending="Αποθήκευση…">Αποθήκευση συνδέσμων</SubmitButton>
+            <a href="/billing" className="btn secondary">Τιμολόγηση ›</a>
+          </div>
+        </form>
+      )}
 
       <div className="card stack" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <h2>Σύνδεση Outlook</h2>
