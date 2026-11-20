@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useDictation } from "@/components/useDictation";
 import { applyVoice, interpretVoice } from "@/app/(app)/voice-actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { VoiceResult } from "@/lib/voice";
@@ -8,39 +9,15 @@ import type { VoiceResult } from "@/lib/voice";
 const TYPES: [string, string][] = [["call", "📞 Τηλέφωνο"], ["meeting", "🤝 Ραντεβού"], ["viber", "💬 Viber"], ["email", "✉️ Email"], ["note", "📝 Σημείωση (όχι επαφή)"]];
 const STAGES: [string, string][] = [["new", "1. Νέο lead"], ["contacted", "2. Έγινε επαφή"], ["meeting", "3. Ραντεβού"], ["proposal", "4. Πρόταση"], ["negotiation", "5. Διαπραγμάτευση"]];
 
-type Rec = { lang: string; continuous: boolean; interimResults: boolean; start: () => void; stop: () => void; onresult: ((e: { resultIndex: number; results: { isFinal: boolean; 0: { transcript: string } }[] & { length: number } }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null };
-
 // «Πες το»: μιλάς (ή γράφεις), η AI προτείνει τι καταγράφεται και ποιο είναι το επόμενο βήμα, εσύ ελέγχεις και πατάς Καταχώριση.
 export function VoiceNote({ leadId, version, stage, today }: { leadId: string; version: number; stage: string; today: string }) {
-  const [text, setText] = useState("");
-  const [live, setLive] = useState("");
-  const [listening, setListening] = useState(false);
+  const { text, shown, edit, listening, toggle: toggleMic, stop, micMsg } = useDictation();
   const [msg, setMsg] = useState<string | null>(null);
   const [res, setRes] = useState<VoiceResult | null>(null);
   const [busy, start] = useTransition();
-  const rec = useRef<Rec | null>(null);
-
-  const toggleMic = () => {
-    if (listening) { rec.current?.stop(); return; }
-    const W = window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec };
-    const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition;
-    if (!Ctor) { setMsg("Αυτός ο browser δεν έχει δικό του μικρόφωνο εδώ. Πάτα μέσα στο πλαίσιο και χρησιμοποίησε το μικρόφωνο του πληκτρολογίου."); return; }
-    const r = new Ctor();
-    r.lang = "el-GR"; r.continuous = true; r.interimResults = true;
-    r.onresult = (e) => {
-      let fin = "", tmp = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) (e.results[i].isFinal ? (fin += e.results[i][0].transcript) : (tmp += e.results[i][0].transcript));
-      if (fin) setText((t) => (t ? t.trimEnd() + " " : "") + fin.trim());
-      setLive(tmp);
-    };
-    r.onend = () => { setListening(false); setLive(""); };
-    r.onerror = (e) => { setListening(false); setLive(""); setMsg(e.error === "not-allowed" ? "Δεν δόθηκε άδεια για το μικρόφωνο. Δώσε άδεια στον browser ή χρησιμοποίησε το μικρόφωνο του πληκτρολογίου." : "Το μικρόφωνο σταμάτησε. Πάτα ξανά ή γράψε το."); };
-    rec.current = r; setMsg(null); setListening(true);
-    try { r.start(); } catch { setListening(false); }
-  };
 
   const understand = () => {
-    rec.current?.stop();
+    stop();
     setMsg(null);
     start(async () => {
       const out = await interpretVoice(leadId, text);
@@ -98,8 +75,8 @@ export function VoiceNote({ leadId, version, stage, today }: { leadId: string; v
           <div className="muted" style={{ fontSize: 13 }}>π.χ. «Μίλησα με τον ιδιοκτήτη, θέλει προσφορά για ΣΟΚ και DALKAS, να τον πάρω την Τρίτη»</div>
         </div>
       </div>
-      <textarea value={text + (live ? (text ? " " : "") + live : "")} onChange={(e) => { setText(e.target.value); setLive(""); }} rows={3} maxLength={2500} style={{ width: "100%" }} placeholder="Μίλα με το μικρόφωνο ή γράψε εδώ…" aria-label="Τι έγινε" />
-      {msg && <div className="msg error">{msg}</div>}
+      <textarea value={shown} onChange={(e) => edit(e.target.value)} rows={3} maxLength={2500} style={{ width: "100%" }} placeholder="Μίλα με το μικρόφωνο ή γράψε εδώ…" aria-label="Τι έγινε" />
+      {(msg ?? micMsg) && <div className="msg error">{msg ?? micMsg}</div>}
       <div><button type="button" onClick={understand} disabled={busy || text.trim().length < 8}>{busy ? "Το σκέφτομαι…" : "Βγάλε τα επόμενα βήματα"}</button></div>
     </div>
   );

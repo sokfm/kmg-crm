@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { SubmitButton } from "@/components/SubmitButton";
 import { createLead } from "../../actions";
 import { Flash } from "@/components/Flash";
+import { VoiceLead } from "@/components/VoiceLead";
 
 const STATIONS = ["ΣΟΚ FM", "DALKAS", "ΜΠΛΕ", "NRG", "lalala.gr", "Social"];
 
@@ -48,7 +49,14 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
           )}
         </div>
       )}
-      <form action={createLead} id="leadform" className="stack card">
+      {!sp.dup_kind && !sp.voice && <VoiceLead />}
+      {sp.voice && !sp.dup_kind && (
+        <div className="msg ok">
+          Γέμισα τη φόρμα από αυτά που είπες. <strong>Έλεγξε τα και πάτα Καταχώριση.</strong>
+          {sp.missing ? ` Δεν άκουσα: ${sp.missing}.` : ""} <Link href="/leads/new">Να το ξαναπώ</Link>
+        </div>
+      )}
+      <form action={createLead} id="leadform" className="stack card" key={sp.voice ? JSON.stringify(sp) : "form"}>
         {sp.dup_kind && <><input type="hidden" name="dup_kind" value={sp.dup_kind} /><input type="hidden" name="dup_id" value={sp.dup_id} /></>}
         <label>Επιχείρηση *<input name="company_name" required defaultValue={sp.company_name} placeholder="π.χ. Φούρνος Παπαδόπουλος" /></label>
         <div className="grid2">

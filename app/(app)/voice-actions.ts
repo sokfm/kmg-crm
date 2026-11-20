@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
-import { understandNote, type VoiceResult } from "@/lib/voice";
+import { understandNewLead, understandNote, type VoiceResult } from "@/lib/voice";
 
 const OPEN = ["new", "contacted", "meeting", "proposal", "negotiation"];
 const isDate = (v: string | null) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -61,4 +61,25 @@ export async function applyVoice(f: FormData) {
 
   revalidatePath(path); revalidatePath("/today"); revalidatePath("/pipeline");
   redirect(`${path}?ok=voice`);
+}
+
+// Νέο lead με τη φωνή: η AI γεμίζει τη φόρμα. Η καταχώριση γίνεται από τη φόρμα, με τους ίδιους ελέγχους (διπλοεγγραφή, ανάθεση).
+export async function interpretNewLead(text: string): Promise<{ ok: true; query: string; missing: string[] } | { ok: false; error: string }> {
+  await requireProfile();
+  const clean = text.trim();
+  if (clean.length < 8) return { ok: false, error: "Πες ή γράψε λίγα παραπάνω: ποια επιχείρηση, τι θέλει, τι ακολουθεί." };
+  try {
+    const v = await understandNewLead(clean);
+    if (!v.company_name) return { ok: false, error: "Δεν κατάλαβα ποια επιχείρηση είναι. Πες το όνομά της ή γράψ' το στη φόρμα." };
+    const q = new URLSearchParams({ voice: "1" });
+    const put = (k: string, x: string | null) => { if (x) q.set(k, x); };
+    put("company_name", v.company_name); put("contact_name", v.contact_name); put("phone", v.phone); put("email", v.email); put("area", v.area);
+    put("source", v.source); put("product_line", v.interest); put("next_step", v.next_step); put("next_step_due", v.next_step_due); put("notes", v.notes);
+    if (v.stations.length) q.set("stations", v.stations.join(","));
+    const missing = [!v.phone && "τηλέφωνο", !v.next_step && "επόμενο βήμα", !v.next_step_due && "ημερομηνία επόμενου βήματος"].filter(Boolean) as string[];
+    if (missing.length) q.set("missing", missing.join(", "));
+    return { ok: true, query: q.toString(), missing };
+  } catch (e) {
+    return { ok: false, error: `Η AI δεν απάντησε τώρα. Δοκίμασε ξανά σε λίγο ή συμπλήρωσε τη φόρμα με το χέρι. (${e instanceof Error ? e.message.slice(0, 60) : "σφάλμα"})` };
+  }
 }
