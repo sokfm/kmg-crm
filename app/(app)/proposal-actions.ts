@@ -99,7 +99,7 @@ export async function copyProposal(f: FormData) {
   const { data: neu, error } = await supabase.from("proposals").insert({ lead_id: leadId, client_type: src!.client_type, prepay: src!.prepay, offer_subtitle: src!.offer_subtitle, title: `${src!.title} (αντίγραφο)`.slice(0, 80) }).select("id").single();
   if (error || !neu) go(pp(leadId, pid), { error: FAIL });
   const rows = ((src!.proposal_items ?? []) as Record<string, unknown>[]).map((r) => {
-    const { id: _id, proposal_id: _p, created_at: _c, updated_at: _u, updated_by: _b, version: _v, ...rest } = r;
+    const { id: _id, proposal_id: _p, created_at: _c, updated_at: _u, updated_by: _b, version: _v, confirmed_start: _cs, ...rest } = r;   // το αντίγραφο είναι νέα πρόταση: δεν κληρονομεί επιβεβαιωμένη έναρξη
     return { ...rest, proposal_id: neu!.id };
   });
   if (rows.length) {
@@ -235,6 +235,21 @@ export async function setItemStart(f: FormData) {
   if (error) go(pp(leadId, pid), { error: msg(error) });
   if (!data || data.length === 0) go(pp(leadId, pid), { conflict: "1" });
   revalidatePath(pp(leadId, pid)); revalidatePath("/dashboard");
+  go(pp(leadId, pid));
+}
+
+// Επιβεβαιωμένη έναρξη: η πραγματική ημέρα που ξεκινάει ο πελάτης. Μία γραμμή (id) ή όλες οι γραμμές της πρότασης.
+export async function setConfirmedStart(f: FormData) {
+  const { supabase } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const raw = s(f, "confirmed_start");
+  const date = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;   // κενό = «δεν έχει επιβεβαιωθεί ακόμα»
+  const id = s(f, "id");
+  const q = supabase.from("proposal_items").update({ confirmed_start: date }).eq("proposal_id", pid);
+  const { error } = id ? await q.eq("id", id) : await q;
+  if (error) go(pp(leadId, pid), { error: msg(error) });
+  revalidatePath(pp(leadId, pid)); revalidatePath("/dashboard"); revalidatePath(`/leads/${leadId}`);
   go(pp(leadId, pid));
 }
 

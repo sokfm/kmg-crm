@@ -2,7 +2,7 @@ import { itemTotal } from "@/lib/pricing";
 
 // Τζίρος ανά μήνα: το ποσό διαιρείται με τις ημέρες της καμπάνιας και κάθε μήνας παίρνει τις ημέρες που παίζει.
 // Ίδιος τρόπος με το αρχείο τιμολόγησης του Νίκου. Κάθε «μήνας» πρότασης = 30 ημέρες.
-export type FItem = { monthly_amount: number; long_months: number | null; long_amount: number | null; months: number; start_date: string | null };
+export type FItem = { monthly_amount: number; long_months: number | null; long_amount: number | null; months: number; start_date: string | null; confirmed_start?: string | null };
 export type MonthPart = { ym: string; days: number; amount: number };
 
 const DAY = 86400000;
@@ -24,23 +24,36 @@ export function splitByMonth(amount: number, start: string, days: number): Month
   return parts;
 }
 
+// Ποια έναρξη μετράει για τον τζίρο:
+// 1. η επιβεβαιωμένη, αν υπάρχει· 2. αλλιώς η έναρξη της προσφοράς·
+// 3. σε lead που δεν έχει κλείσει ακόμα, αν η έναρξη της προσφοράς έχει περάσει, μετράει από σήμερα (δεν γίνεται να έχει ξεκινήσει).
+export function effectiveStart(i: FItem, opts?: { open?: boolean; today?: string }): { date: string | null; how: "confirmed" | "offer" | "rolled" | "none" } {
+  if (i.confirmed_start) return { date: i.confirmed_start, how: "confirmed" };
+  if (!i.start_date) return { date: null, how: "none" };
+  if (opts?.open && opts.today && i.start_date < opts.today) return { date: opts.today, how: "rolled" };
+  return { date: i.start_date, how: "offer" };
+}
+
 // Μια πρόταση: η τελική τιμή (μετά τις εκπτώσεις) μοιράζεται στις γραμμές αναλογικά και κάθε γραμμή σπάει στους μήνες της.
-export function proposalByMonth(items: FItem[], finalTotal: number): { months: MonthPart[]; undated: number } {
+export function proposalByMonth(items: FItem[], finalTotal: number, opts?: { open?: boolean; today?: string }): { months: MonthPart[]; undated: number; unconfirmed: number; rolled: boolean } {
   const list = items.reduce((s, i) => s + itemTotal(i).total, 0);
   const by = new Map<string, MonthPart>();
-  let undated = 0;
-  if (list <= 0) return { months: [], undated: 0 };
+  let undated = 0, unconfirmed = 0, rolled = false;
+  if (list <= 0) return { months: [], undated: 0, unconfirmed: 0, rolled: false };
   for (const i of items) {
     const share = (itemTotal(i).total / list) * finalTotal;
-    if (!i.start_date) { undated += share; continue; }
-    for (const p of splitByMonth(share, i.start_date, i.months * 30)) {
+    const eff = effectiveStart(i, opts);
+    if (!eff.date) { undated += share; continue; }
+    if (eff.how !== "confirmed") unconfirmed += share;
+    if (eff.how === "rolled") rolled = true;
+    for (const p of splitByMonth(share, eff.date, i.months * 30)) {
       const e = by.get(p.ym) ?? { ym: p.ym, days: 0, amount: 0 };
       e.days = Math.max(e.days, p.days); e.amount += p.amount;
       by.set(p.ym, e);
     }
   }
   const months = [...by.values()].sort((a, b) => a.ym.localeCompare(b.ym)).map((m) => ({ ...m, amount: Math.round(m.amount * 100) / 100 }));
-  return { months, undated: Math.round(undated * 100) / 100 };
+  return { months, undated: Math.round(undated * 100) / 100, unconfirmed: Math.round(unconfirmed * 100) / 100, rolled };
 }
 
 const MON = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μαΐ", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"];

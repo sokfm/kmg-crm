@@ -42,19 +42,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Πρόβλεψη τζίρου από τις κύριες προτάσεις: κλεισμένα (κερδισμένα leads) και ανοιχτά (ακόμα στο pipeline), ξεχωριστά
   const [{ data: mainProps }, { data: propTotals }] = await Promise.all([
-    supabase.from("proposals").select("id, leads!inner(status), proposal_items(monthly_amount, long_months, long_amount, months, start_date)").eq("is_main", true),
+    supabase.from("proposals").select("id, leads!inner(status), proposal_items(monthly_amount, long_months, long_amount, months, start_date, confirmed_start)").eq("is_main", true),
     supabase.from("proposal_totals").select("proposal_id, final_total"),
   ]);
   const finalOf = new Map((propTotals ?? []).map((x) => [x.proposal_id as string, Number(x.final_total)]));
   const fMonths = Array.from({ length: 6 }, (_, i) => { const d = new Date(Date.UTC(nowY, nowM - 1 + i, 1)); return d.toISOString().slice(0, 7); });
   const fc = new Map(fMonths.map((ym) => [ym, { won: 0, open: 0 }]));
   const fcUndated = { won: 0, open: 0 }, fcLater = { won: 0, open: 0 };
+  let wonUnconfirmed = 0;
   for (const p of (mainProps ?? []) as unknown as { id: string; leads: { status: string }; proposal_items: FItem[] }[]) {
     const st = p.leads?.status;
     if (st === "lost" || !p.proposal_items?.length) continue;
     const k = st === "won" ? "won" : "open";
-    const r = proposalByMonth(p.proposal_items, finalOf.get(p.id) ?? 0);
+    const r = proposalByMonth(p.proposal_items, finalOf.get(p.id) ?? 0, { open: k === "open", today: t });
     fcUndated[k] += r.undated;
+    if (k === "won") wonUnconfirmed += r.unconfirmed;
     for (const m of r.months) { const e = fc.get(m.ym); if (e) e[k] += m.amount; else if (m.ym > fMonths[5]) fcLater[k] += m.amount; }
   }
   const hasForecast = [...fc.values()].some((v) => v.won || v.open) || fcUndated.won + fcUndated.open + fcLater.won + fcLater.open > 0;
@@ -172,6 +174,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               </tbody>
             </table>
           </div>
+          {wonUnconfirmed > 0 && <p className="late-txt" style={{ marginBottom: 0 }}>{eur(wonUnconfirmed)} από τα κλεισμένα μετράνε με την έναρξη της προσφοράς, γιατί δεν έχει μπει ακόμα επιβεβαιωμένη έναρξη.</p>}
+          <p className="muted" style={{ marginBottom: 0, fontSize: 13 }}>Ανοιχτά με έναρξη που έχει ήδη περάσει μετράνε από σήμερα.</p>
         </div>
       )}
 

@@ -6,9 +6,10 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { AutoSelect } from "@/components/AutoSelect";
 import { AutoDate } from "@/components/AutoDate";
 import { addDays, proposalByMonth, ymLabel } from "@/lib/forecast";
+import { today as todayStr } from "@/lib/format";
 import { dateGr } from "@/lib/format";
 import { CLIENT_HINT, CLIENT_LABEL, STATIONS, itemTotal, type ClientType, type Item } from "@/lib/pricing";
-import { addPackageItem, copyProposal, decideDiscount, deleteItem, deleteProposal, renameProposal, requestDiscount, setClientType, setItemMonths, setItemStart, setMainProposal, togglePrepay } from "../../../../proposal-actions";
+import { addPackageItem, copyProposal, decideDiscount, deleteItem, deleteProposal, renameProposal, requestDiscount, setClientType, setConfirmedStart, setItemMonths, setItemStart, setMainProposal, togglePrepay } from "../../../../proposal-actions";
 
 type Pkg = {
   id: string; station: string; kind: "spots" | "sponsorship" | "mention"; client_type: string; name: string; description: string | null;
@@ -25,7 +26,7 @@ export default async function ProposalPage({
   const { id, pid } = await params;
   const sp = await searchParams;
   const { supabase, isAdmin } = await requireProfile();
-  const { data: lead } = await supabase.from("leads").select("id, company_name, customer_id, customers(agency_id)").eq("id", id).maybeSingle();
+  const { data: lead } = await supabase.from("leads").select("id, company_name, status, customer_id, customers(agency_id)").eq("id", id).maybeSingle();
   if (!lead) notFound();
   const { data: p } = await supabase.from("proposals").select("id, code, sent_at, client_type, title, is_main, version, prepay, req_amount, req_reason, req_status, decided_note, requester:profiles!proposals_req_by_fkey(full_name), decider:profiles!proposals_decided_by_fkey(full_name), proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
   if (!p) notFound();
@@ -46,7 +47,11 @@ export default async function ProposalPage({
   const budget = items.reduce((a, i) => a + itemTotal(i).total, 0);
   const { data: tot } = await supabase.from("proposal_totals").select("list_total, combo_pct, prepay_pct, book_total, final_total").eq("proposal_id", pid).maybeSingle();
   const T = { list: Number(tot?.list_total ?? budget), combo: Number(tot?.combo_pct ?? 0), prepay: Number(tot?.prepay_pct ?? 0), book: Number(tot?.book_total ?? budget), final: Number(tot?.final_total ?? budget) };
-  const byMonth = proposalByMonth(items, T.final);
+  const leadOpen = !["won", "lost"].includes(lead.status as string);
+  const fOpts = { open: leadOpen, today: todayStr() };
+  const byMonth = proposalByMonth(items, T.final, fOpts);
+  const askConfirm = locked || lead.status === "won";   // από τη στιγμή που στάλθηκε ή κλείστηκε, ζητάμε την πραγματική έναρξη
+  const allConfirmed = items.length > 0 && items.every((i) => i.confirmed_start);
   const afterCombo = Math.round(T.list * (100 - T.combo)) / 100;
   const requester = (p.requester as unknown as { full_name: string } | null)?.full_name ?? "Account Executive";
   const decider = (p.decider as unknown as { full_name: string } | null)?.full_name ?? "";
@@ -131,7 +136,9 @@ export default async function ProposalPage({
                           <span className="muted" style={{ fontSize: 13 }}>Διάρκεια</span>
                           <AutoSelect name="months" value={String(i.months)} options={MONTH_OPTS} label="Διάρκεια σε μήνες" />
                         </form>)}
-                        {i.kind === "plan" && !locked ? (
+                        {locked ? (
+                          <span className="muted" style={{ fontSize: 13 }}>Έναρξη προσφοράς: {i.start_date ? dateGr(i.start_date) : "—"}</span>
+                        ) : i.kind === "plan" ? (
                           <span className="muted" style={{ fontSize: 13 }}>Έναρξη: {i.start_date ? `${dateGr(i.start_date)} έως ${dateGr(addDays(i.start_date, i.months * 30 - 1))}` : "—"}<br />(αλλάζει μέσα στο πλάνο)</span>
                         ) : (
                           <form action={setItemStart} className="row" style={{ gap: 6, alignItems: "center" }}>
@@ -139,6 +146,14 @@ export default async function ProposalPage({
                             <span className="muted" style={{ fontSize: 13 }}>Έναρξη</span>
                             <AutoDate name="start_date" value={i.start_date ?? ""} label="Ημερομηνία έναρξης καμπάνιας" />
                             {i.start_date && <span className="muted" style={{ fontSize: 13 }}>έως {dateGr(addDays(i.start_date, i.months * 30 - 1))}</span>}
+                          </form>
+                        )}
+                        {askConfirm && (
+                          <form action={setConfirmedStart} className="row" style={{ gap: 6, alignItems: "center" }}>
+                            {ids}<input type="hidden" name="id" value={i.id} />
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{i.confirmed_start ? "✓ Επιβεβαιωμένη έναρξη" : "Επιβεβαιωμένη έναρξη;"}</span>
+                            <AutoDate name="confirmed_start" value={i.confirmed_start ?? ""} label="Επιβεβαιωμένη έναρξη" />
+                            {i.confirmed_start && <span className="muted" style={{ fontSize: 13 }}>έως {dateGr(addDays(i.confirmed_start, i.months * 30 - 1))}</span>}
                           </form>
                         )}
                         <div style={{ textAlign: "right", minWidth: 110 }}>
@@ -195,6 +210,19 @@ export default async function ProposalPage({
                     </div>
                   )}
                   {byMonth.undated > 0 && <div className="late-txt" style={{ fontSize: 13, marginTop: 6 }}>{eur(byMonth.undated)} χωρίς μήνα: βάλε ημερομηνία έναρξης στις γραμμές που δεν έχουν.</div>}
+                  <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+                    {allConfirmed ? "✓ Υπολογισμένο με την επιβεβαιωμένη έναρξη."
+                      : byMonth.rolled ? "Η έναρξη της προσφοράς έχει περάσει και το lead δεν έχει κλείσει, οπότε μετράω από σήμερα. Διορθώνεται μόνο του όταν μπει επιβεβαιωμένη έναρξη."
+                      : "Εκτίμηση με την έναρξη της προσφοράς, μέχρι να μπει η επιβεβαιωμένη."}
+                  </div>
+                  {askConfirm && (
+                    <form action={setConfirmedStart} className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                      {ids}
+                      <strong style={{ fontSize: 13 }}>Επιβεβαιωμένη έναρξη για όλες τις γραμμές</strong>
+                      <input type="date" name="confirmed_start" required aria-label="Επιβεβαιωμένη έναρξη για όλες τις γραμμές" style={{ maxWidth: 160 }} />
+                      <SubmitButton pending="…">Ισχύει για όλες</SubmitButton>
+                    </form>
+                  )}
                 </div>
                 {(!locked || p.req_status === "approved") && <div style={{ border: "1px solid #ebe8ef", borderRadius: 12, padding: 12, marginTop: 10 }} className="stack">
                   <strong>Ειδική τιμή (θέλει έγκριση)</strong>

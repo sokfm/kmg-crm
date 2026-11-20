@@ -49,6 +49,8 @@ export function MoveDialog({ card, to: initial, today, back, onClose }: { card: 
         ) : to === "won" ? (
           <>
             <label>Αξία που κλείσαμε (€)<input name="expected_value" inputMode="decimal" defaultValue={card.expected_value ?? ""} placeholder="π.χ. 1.500" /></label>
+            <label>Πότε ξεκινάει στον αέρα; (επιβεβαιωμένη έναρξη)<input name="confirmed_start" type="date" /></label>
+            <p className="muted" style={{ marginTop: -6 }}>Από αυτή τη μέρα μοιράζεται ο τζίρος στους μήνες. Αν δεν την ξέρεις ακόμα, άφησέ το κενό και βάλ' τη μετά μέσα στην πρόταση.</p>
             <p className="muted">Ο τζίρος στο dashboard έρχεται από την τιμολόγηση· αυτή η αξία μετράει στα «κλεισμένα deals».</p>
           </>
         ) : (

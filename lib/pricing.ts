@@ -49,7 +49,7 @@ export function planCost(grid: Grid, slots: Slot[], col: PriceCol, sec: number) 
 export type Item = {
   id: string; station: string; kind: "package" | "plan"; title: string; detail: string | null;
   monthly_amount: number; long_months: number | null; long_amount: number | null; long_detail: string | null;
-  proposal_id?: string; qty: number; months: number; spots: number | null; sec: number | null; start_date: string | null; version: number;
+  proposal_id?: string; qty: number; months: number; spots: number | null; sec: number | null; start_date: string | null; confirmed_start?: string | null; version: number;
 };
 // Σύνολο γραμμής: μήνες × κόστος μήνα (με το bonus του πακέτου όταν οι μήνες το πιάνουν)
 export function itemTotal(i: Pick<Item, "monthly_amount" | "long_months" | "long_amount" | "months">) {
