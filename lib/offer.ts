@@ -17,7 +17,7 @@ export type OfferItem = {
 };
 export type OfferRow = { station: string; period: string; title: string; sub: string | null; c1: string; c2: string; price: number };
 export type Snapshot = {
-  company: string; subtitle: string; local: boolean; rows: OfferRow[];
+  code?: string; company: string; subtitle: string; local: boolean; rows: OfferRow[];
   list: number; final: number; reasons: string[]; totalSpots: number;
   issued: string; validUntil: string; ae: { name: string; phone: string | null; email: string | null };
 };

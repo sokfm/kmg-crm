@@ -13,7 +13,7 @@ const CSS = `
 .offer .cover h1 { font-size: 60px; line-height: 1.04; margin: 14px 0 10px; font-weight: 800; letter-spacing: -.02em; }
 .offer .cover .sub { font-size: 24px; color: var(--gray); }
 .offer .cover .clogo { margin-top: 34px; max-width: 320px; max-height: 150px; display: block; }
-.offer .cover .meta { margin-top: 40px; display: flex; gap: 48px; font-size: 15px; }
+.offer .cover .meta { margin-top: 40px; display: flex; gap: 40px; font-size: 15px; }
 .offer .cover .meta b { display: block; font-size: 12px; letter-spacing: .14em; color: #8a8b90; font-weight: 700; margin-bottom: 4px; }
 .offer .kmg { position: absolute; right: 56px; bottom: 36px; height: 120px; }
 .offer .side { position: absolute; left: 0; top: 0; bottom: 0; width: 300px; background: var(--gray); color: #fff; padding: 64px 36px; }
@@ -49,6 +49,7 @@ const CSS = `
 .offer .thanks { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .offer .thanks img { height: 170px; } .offer .thanks h3 { font-size: 30px; font-weight: 500; margin: 34px 0 8px; }
 .offer .thanks p { color: #6d6e73; font-size: 15px; margin: 2px 0; }
+.offer.draft .page:after { content: "ΠΡΟΣΧΕΔΙΟ"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 150px; font-weight: 800; letter-spacing: .08em; color: rgba(226, 0, 26, .13); transform: rotate(-18deg); pointer-events: none; z-index: 5; }
 @media print {
   html, body { background: #fff !important; margin: 0 !important; }
   .offer .page { margin: 0; box-shadow: none; }
@@ -59,13 +60,13 @@ const CSS = `
 }`;
 
 // Οι τρεις σελίδες της προσφοράς (εξώφυλλο, πίνακας, κλείσιμο), όπως θα τις δει ο πελάτης
-export function OfferDoc({ s, logo }: { s: Snapshot; logo: string | null }) {
+export function OfferDoc({ s, logo, draft }: { s: Snapshot; logo: string | null; draft?: boolean }) {
   const stations = [...new Set(s.rows.map((r) => r.station))];
   const saved = Math.round((s.list - s.final) * 100) / 100;
   const tight = s.rows.length > 4;
   const contact = [s.ae.name, s.ae.phone, s.ae.email].filter(Boolean).join(" · ");
   return (
-    <div className="offer">
+    <div className={draft ? "offer draft" : "offer"}>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <section className="page cover">
         <div className="stripes"><i style={{ width: 120, background: "var(--yellow)" }} /><i style={{ width: 90, background: "var(--red)" }} /><i style={{ width: 90, background: "var(--gray)" }} /></div>
@@ -79,6 +80,7 @@ export function OfferDoc({ s, logo }: { s: Snapshot; logo: string | null }) {
             <div><b>ΗΜΕΡΟΜΗΝΙΑ</b>{dateLong(s.issued)}</div>
             <div><b>ΙΣΧΥΕΙ ΕΩΣ</b>{dateLong(s.validUntil)}</div>
             <div><b>ΥΠΕΥΘΥΝΟΣ</b>{s.ae.name}</div>
+            {s.code && <div><b>ΚΩΔΙΚΟΣ</b>{s.code}</div>}
           </div>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -126,7 +128,7 @@ export function OfferDoc({ s, logo }: { s: Snapshot; logo: string | null }) {
           <ul>
             <li>Στις παραπάνω τιμές δεν συμπεριλαμβάνεται ΦΠΑ 24%.</li>
             <li>Σε περίπτωση διαφοροποίησης των δευτερολέπτων, διαμορφώνεται ανάλογα και το τελικό κόστος του προγράμματος.</li>
-            <li>Η πρόταση ισχύει έως {dateLong(s.validUntil)}.</li>
+            <li>Η πρόταση{s.code ? ` ${s.code}` : ""} ισχύει έως {dateLong(s.validUntil)}.</li>
           </ul>
           <div className="who"><b>{s.ae.name}</b>{s.ae.phone}{s.ae.phone && <br />}{s.ae.email}</div>
           {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -94,9 +94,9 @@ export async function copyProposal(f: FormData) {
   const { supabase } = await requireProfile();
   const leadId = s(f, "lead_id")!;
   const pid = s(f, "proposal_id")!;
-  const { data: src } = await supabase.from("proposals").select("client_type, title, proposal_items(*)").eq("id", pid).eq("lead_id", leadId).maybeSingle();
+  const { data: src } = await supabase.from("proposals").select("client_type, title, prepay, offer_subtitle, proposal_items(*)").eq("id", pid).eq("lead_id", leadId).maybeSingle();
   if (!src) go(list(leadId), { error: "Η πρόταση δεν βρέθηκε" });
-  const { data: neu, error } = await supabase.from("proposals").insert({ lead_id: leadId, client_type: src!.client_type, title: `${src!.title} (αντίγραφο)`.slice(0, 80) }).select("id").single();
+  const { data: neu, error } = await supabase.from("proposals").insert({ lead_id: leadId, client_type: src!.client_type, prepay: src!.prepay, offer_subtitle: src!.offer_subtitle, title: `${src!.title} (αντίγραφο)`.slice(0, 80) }).select("id").single();
   if (error || !neu) go(pp(leadId, pid), { error: FAIL });
   const rows = ((src!.proposal_items ?? []) as Record<string, unknown>[]).map((r) => {
     const { id: _id, proposal_id: _p, created_at: _c, updated_at: _u, updated_by: _b, version: _v, ...rest } = r;
@@ -322,45 +322,27 @@ export async function uploadLogo(f: FormData) {
   go(op(leadId, pid), { ok: "logo" });
 }
 
-// Έκδοση προσφοράς: κρατιέται όπως ακριβώς βγήκε και ανοίγει για κατέβασμα σε PDF
+// Έκδοση για αποστολή: η πρόταση ΚΛΕΙΔΩΝΕΙ, η προσφορά κρατιέται όπως βγήκε και ανοίγει για κατέβασμα σε PDF
 export async function issueOffer(f: FormData) {
   const { supabase, profile } = await requireProfile();
   const leadId = s(f, "lead_id")!;
   const pid = s(f, "proposal_id")!;
-  const { buildRows, autoSubtitle, VALID_DAYS } = await import("@/lib/offer");
-  const [{ data: p }, { data: tot }, { data: lead }] = await Promise.all([
-    supabase.from("proposals").select("id, client_type, offer_subtitle, prepay, req_status, proposal_items(*)").eq("id", pid).eq("lead_id", leadId).maybeSingle(),
-    supabase.from("proposal_totals").select("list_total, combo_pct, prepay_pct, book_total, final_total").eq("proposal_id", pid).maybeSingle(),
-    supabase.from("leads").select("company_name, owner_id").eq("id", leadId).maybeSingle(),
-  ]);
-  if (!p || !tot || !lead || !p.client_type) go(pp(leadId, pid), { error: "Η πρόταση δεν βρέθηκε" });
-  const items = (p!.proposal_items ?? []) as import("@/lib/offer").OfferItem[];
-  if (!items.length) go(op(leadId, pid), { error: "Η πρόταση είναι άδεια" });
-  if (p!.req_status === "pending") go(op(leadId, pid), { error: "Υπάρχει αίτημα ειδικής τιμής σε αναμονή. Η προσφορά βγαίνει μετά την απάντηση." });
-  const order = [...STATIONS] as string[];
-  items.sort((a, b) => order.indexOf(a.station) - order.indexOf(b.station));
-  const { rows, totalSpots } = buildRows(items, p!.client_type as ClientType);
-  const { data: ae } = await supabase.from("profiles").select("full_name, offer_name, offer_phone, email").eq("id", lead!.owner_id ?? profile.id).maybeSingle();
-  const reasons: string[] = [];
-  if (Number(tot!.combo_pct) > 0) reasons.push(`έκπτωση combo ${tot!.combo_pct}%`);
-  if (Number(tot!.prepay_pct) > 0) reasons.push(`έκπτωση προπληρωμής ${tot!.prepay_pct}%`);
-  if (p!.req_status === "approved") reasons.push("ειδική τιμή");
-  const now = new Date();
-  const valid = new Date(now.getTime() + VALID_DAYS * 86400000);
-  const snapshot = {
-    company: lead!.company_name as string,
-    subtitle: (p!.offer_subtitle as string | null) ?? autoSubtitle(items),
-    local: p!.client_type === "local",
-    rows, totalSpots,
-    list: Number(tot!.list_total), final: Number(tot!.final_total), reasons,
-    issued: now.toISOString(), validUntil: valid.toISOString(),
-    ae: { name: ae?.offer_name ?? ae?.full_name ?? "Kartelias Media Group", phone: ae?.offer_phone ?? null, email: ae?.email ?? null },
-  };
+  const { buildSnapshot } = await import("@/lib/offer-server");
+  const built = await buildSnapshot(supabase, leadId, pid, profile.id);
+  if ("error" in built) go(op(leadId, pid), { error: built.error });
+  const b = built as Exclude<typeof built, { error: string }>;
+  if (b.sent) { // έχει ήδη σταλεί: ανοίγει η ίδια προσφορά, δεν βγαίνει δεύτερη
+    const { data: had } = await supabase.from("proposal_offers").select("id").eq("proposal_id", pid).order("created_at", { ascending: false }).limit(1);
+    if (had && had.length) redirect(`/offer/${had[0].id}`);
+  }
+  if (b.pending) go(op(leadId, pid), { error: "Υπάρχει αίτημα ειδικής τιμής σε αναμονή. Η προσφορά βγαίνει μετά την απάντηση." });
+  const { error: e1 } = await supabase.rpc("lock_proposal", { p_id: pid });
+  if (e1) go(op(leadId, pid), { error: msg(e1) });
   const { data: off, error } = await supabase.from("proposal_offers")
-    .insert({ proposal_id: pid, lead_id: leadId, snapshot, final_total: snapshot.final, valid_until: valid.toISOString().slice(0, 10) })
+    .insert({ proposal_id: pid, lead_id: leadId, snapshot: b.snapshot, final_total: b.snapshot.final, valid_until: b.snapshot.validUntil.slice(0, 10) })
     .select("id").single();
   if (error || !off) go(op(leadId, pid), { error: msg(error) });
-  revalidatePath(op(leadId, pid));
+  revalidatePath(op(leadId, pid)); revalidatePath(pp(leadId, pid)); revalidatePath(`/leads/${leadId}`);
   redirect(`/offer/${off!.id}?print=1`);
 }
 

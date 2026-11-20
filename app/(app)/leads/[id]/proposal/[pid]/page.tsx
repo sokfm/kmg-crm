@@ -24,12 +24,14 @@ export default async function ProposalPage({
   const { supabase, isAdmin } = await requireProfile();
   const { data: lead } = await supabase.from("leads").select("id, company_name, customer_id, customers(agency_id)").eq("id", id).maybeSingle();
   if (!lead) notFound();
-  const { data: p } = await supabase.from("proposals").select("id, client_type, title, is_main, version, prepay, req_amount, req_reason, req_status, decided_note, requester:profiles!proposals_req_by_fkey(full_name), decider:profiles!proposals_decided_by_fkey(full_name), proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
+  const { data: p } = await supabase.from("proposals").select("id, code, sent_at, client_type, title, is_main, version, prepay, req_amount, req_reason, req_status, decided_note, requester:profiles!proposals_req_by_fkey(full_name), decider:profiles!proposals_decided_by_fkey(full_name), proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
   if (!p) notFound();
   const type = (p?.client_type ?? null) as ClientType | null;
   const items = ((p?.proposal_items ?? []) as Item[]).sort((a, b) => STATIONS.indexOf(a.station as (typeof STATIONS)[number]) - STATIONS.indexOf(b.station as (typeof STATIONS)[number]));
+  const locked = !!p.sent_at;
+  const sentOn = p.sent_at ? new Intl.DateTimeFormat("el-GR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Athens" }).format(new Date(p.sent_at)) : "";
   const hasAgency = !!(lead.customers as unknown as { agency_id: string | null } | null)?.agency_id;
-  const add = (STATIONS as readonly string[]).includes(sp.add) ? sp.add : null;
+  const add = !locked && (STATIONS as readonly string[]).includes(sp.add) ? sp.add : null;
   const base = `/leads/${id}/proposal/${pid}`;
   const ids = <><input type="hidden" name="lead_id" value={id} /><input type="hidden" name="proposal_id" value={pid} /></>;
 
@@ -49,13 +51,19 @@ export default async function ProposalPage({
   return (
     <main className="wrap" style={{ maxWidth: 1000 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-        <h1>{p.title} · {lead.company_name}</h1>
+        <h1>{p.title} · {lead.company_name} <span className="badge gray" style={{ verticalAlign: "middle" }}>{p.code}</span></h1>
         <Link href={`/leads/${id}/proposal`} className="muted">← Όλες οι προτάσεις</Link>
       </div>
       <Flash sp={sp} />
-      <p className="muted" style={{ marginTop: 0 }}>Εσωτερικό εργαλείο: εδώ στήνεις τα νούμερα. Δεν στέλνεται τίποτα στον πελάτη. Τιμές χωρίς ΦΠΑ.</p>
+      {locked ? (
+        <div className="msg" style={{ background: "var(--orange-bg)" }}>
+          <strong>🔒 Κλειδωμένη.</strong> Εκδόθηκε για αποστολή στις {sentOn}. Δεν αλλάζει πια τίποτα, ώστε ο κωδικός {p.code} να δείχνει πάντα αυτό που πήρε ο πελάτης. Θέλεις αλλαγή; Πάτα «Αντίγραφο»: ανοίγει καινούργια πρόταση με νέο κωδικό.
+        </div>
+      ) : (
+        <p className="muted" style={{ marginTop: 0 }}>Εσωτερικό εργαλείο: εδώ στήνεις τα νούμερα. Τιμές χωρίς ΦΠΑ. Μόλις την εκδώσεις για αποστολή, κλειδώνει.</p>
+      )}
 
-      {!type || sp.change === "1" ? (
+      {!type || (sp.change === "1" && !locked) ? (
         <form action={setClientType} className="card stack">
           {ids}
           <h2 style={{ margin: 0 }}>Τι πελάτης είναι;</h2>
@@ -75,7 +83,7 @@ export default async function ProposalPage({
             <span className="badge onair">{CLIENT_LABEL[type]}</span>
             {hasAgency && type !== "media" && <span className="badge late">Η καρτέλα του έχει πρακτορείο</span>}
             <span style={{ flex: 1 }} />
-            {items.length === 0 && <Link href={`${base}?change=1`} className="muted">Αλλαγή</Link>}
+            {items.length === 0 && !locked && <Link href={`${base}?change=1`} className="muted">Αλλαγή</Link>}
           </div>
 
           <div className="card row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -89,8 +97,8 @@ export default async function ProposalPage({
             ) : (
               <form action={setMainProposal}>{ids}<button type="submit" className="secondary">Να μετράει αυτή στο lead</button></form>
             )}
-            {items.length > 0 && <Link href={`${base}/offer`} className="btn">Προσφορά για τον πελάτη →</Link>}
-            <form action={copyProposal}>{ids}<button type="submit" className="secondary">Αντίγραφο</button></form>
+            {items.length > 0 && <Link href={`${base}/offer`} className="btn">{locked ? "Η προσφορά που στάλθηκε →" : "Προσφορά για τον πελάτη →"}</Link>}
+            <form action={copyProposal}>{ids}<button type="submit" className={locked ? "" : "secondary"}>{locked ? "Αντίγραφο (νέα πρόταση)" : "Αντίγραφο"}</button></form>
             {items.length === 0 && <form action={deleteProposal}>{ids}<button type="submit" className="secondary">Διαγραφή</button></form>}
           </div>
 
@@ -113,19 +121,20 @@ export default async function ProposalPage({
                             {!t.bonus && i.long_months != null && i.long_amount != null && <> · από {i.long_months} μήνες: {eur(Number(i.long_amount))}/μήνα</>}
                           </div>
                         </div>
+                        {locked ? <span className="muted" style={{ fontSize: 13 }}>Διάρκεια: {MONTH_OPTS[i.months - 1]?.label ?? `${i.months} μήνες`}</span> : (
                         <form action={setItemMonths} className="row" style={{ gap: 6, alignItems: "center" }}>
                           {ids}<input type="hidden" name="id" value={i.id} /><input type="hidden" name="version" value={i.version} />
                           <span className="muted" style={{ fontSize: 13 }}>Διάρκεια</span>
                           <AutoSelect name="months" value={String(i.months)} options={MONTH_OPTS} label="Διάρκεια σε μήνες" />
-                        </form>
+                        </form>)}
                         <div style={{ textAlign: "right", minWidth: 110 }}>
                           <div style={{ fontSize: 18, fontWeight: 800 }}>{eur(t.total)}</div>
                           <div className="row" style={{ gap: 10, justifyContent: "flex-end", fontSize: 13 }}>
                             {i.kind === "plan" && <Link href={`${base}/plan?item=${i.id}`}>Άνοιγμα πλάνου</Link>}
-                            <form action={deleteItem}>
+                            {!locked && <form action={deleteItem}>
                               {ids}<input type="hidden" name="id" value={i.id} />
                               <button type="submit" className="linklike" style={{ background: "none", border: 0, padding: 0, color: "var(--muted)", fontWeight: 500, cursor: "pointer", textDecoration: "underline" }}>Αφαίρεση</button>
-                            </form>
+                            </form>}
                           </div>
                         </div>
                       </div>
@@ -145,11 +154,11 @@ export default async function ProposalPage({
                   {T.combo ? <strong>− {eur(T.list - afterCombo)}</strong> : <span className="muted">δεν ισχύει (ένα ραδιόφωνο)</span>}
                 </div>
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <form action={togglePrepay} className="row" style={{ gap: 8, alignItems: "center" }}>
+                  {locked ? <span>Προπληρωμή 10% <span className="muted">· {p.prepay ? "ναι" : "όχι"}</span></span> : <form action={togglePrepay} className="row" style={{ gap: 8, alignItems: "center" }}>
                     {ids}<input type="hidden" name="version" value={p.version} /><input type="hidden" name="prepay" value={p.prepay ? "0" : "1"} />
                     <span>Προπληρωμή 10%</span>
                     <button type="submit" className={p.prepay ? "" : "secondary"} style={{ padding: "5px 12px" }} aria-pressed={p.prepay}>{p.prepay ? "✓ Ναι" : "Όχι"}</button>
-                  </form>
+                  </form>}
                   {T.prepay ? <strong>− {eur(afterCombo - T.book)}</strong> : <span className="muted">—</span>}
                 </div>
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid #ebe8ef", paddingTop: 8, marginTop: 6 }}>
@@ -164,7 +173,7 @@ export default async function ProposalPage({
                 )}
                 <div className="muted" style={{ fontSize: 13 }}>Χωρίς ΦΠΑ. Το 8% και το 10% είναι by the book και δεν θέλουν έγκριση.</div>
 
-                <div style={{ border: "1px solid #ebe8ef", borderRadius: 12, padding: 12, marginTop: 10 }} className="stack">
+                {(!locked || p.req_status === "approved") && <div style={{ border: "1px solid #ebe8ef", borderRadius: 12, padding: 12, marginTop: 10 }} className="stack">
                   <strong>Ειδική τιμή (θέλει έγκριση)</strong>
                   {p.req_status === "pending" && (
                     <>
@@ -184,9 +193,9 @@ export default async function ProposalPage({
                       ) : <div className="muted">Θα ειδοποιηθείς μόλις απαντήσει ο Νίκος ή η Γιάννα. Μέχρι τότε ισχύει η τιμή by the book.</div>}
                     </>
                   )}
-                  {p.req_status === "approved" && <div className="msg ok">Εγκρίθηκε {eur(Number(p.req_amount))}{decider ? ` από ${decider}` : ""}. Λόγος: {p.req_reason}{p.decided_note ? ` · Σχόλιο: ${p.decided_note}` : ""}. Αν αλλάξεις κάτι στην πρόταση, η έγκριση ακυρώνεται.</div>}
+                  {p.req_status === "approved" && <div className="msg ok">Εγκρίθηκε {eur(Number(p.req_amount))}{decider ? ` από ${decider}` : ""}. Λόγος: {p.req_reason}{p.decided_note ? ` · Σχόλιο: ${p.decided_note}` : ""}. {locked ? "" : " Αν αλλάξεις κάτι στην πρόταση, η έγκριση ακυρώνεται."}</div>}
                   {p.req_status === "rejected" && <div className="msg error">Δεν εγκρίθηκε η τιμή {eur(Number(p.req_amount))}{decider ? ` (${decider})` : ""}{p.decided_note ? `: ${p.decided_note}` : "."} Ισχύει η τιμή by the book.</div>}
-                  {p.req_status !== "pending" && p.req_status !== "approved" && (
+                  {!locked && p.req_status !== "pending" && p.req_status !== "approved" && (
                     <form action={requestDiscount} className="stack">
                       {ids}
                       <div className="muted">{isAdmin ? "Βάλε την τελική τιμή και τον λόγο. Ισχύει αμέσως." : "Ο πελάτης θέλει καλύτερη τιμή; Γράψε πόσο και γιατί, και πάει για έγκριση στον Νίκο και τη Γιάννα."}</div>
@@ -197,12 +206,12 @@ export default async function ProposalPage({
                       <div><SubmitButton pending="Αποστολή…">{isAdmin ? "Ορισμός ειδικής τιμής" : "Ζήτα έγκριση"}</SubmitButton></div>
                     </form>
                   )}
-                </div>
+                </div>}
               </div>
             )}
           </div>
 
-          <div className="card stack">
+          {!locked && <div className="card stack">
             <h2 style={{ margin: 0 }}>{items.length ? "Πρόσθεσε κι άλλο μέσο" : "Διάλεξε μέσο"}</h2>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               {STATIONS.map((st) => <Link key={st} href={`${base}?add=${encodeURIComponent(st)}`} className={`btn ${add === st ? "" : "secondary"}`}>{st}</Link>)}
@@ -241,7 +250,7 @@ export default async function ProposalPage({
                 ))}
               </div>
             )}
-          </div>
+          </div>}
         </>
       )}
     </main>

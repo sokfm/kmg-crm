@@ -16,7 +16,7 @@ export default async function OfferPrep({ params, searchParams }: { params: Prom
   const { supabase, profile } = await requireProfile();
   const { data: lead } = await supabase.from("leads").select("id, company_name, customer_id, owner_id").eq("id", id).maybeSingle();
   if (!lead) notFound();
-  const { data: p } = await supabase.from("proposals").select("id, title, client_type, offer_subtitle, req_status, proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
+  const { data: p } = await supabase.from("proposals").select("id, code, sent_at, title, client_type, offer_subtitle, req_status, proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
   if (!p) notFound();
   const order = [...STATIONS] as string[];
   const items = ((p.proposal_items ?? []) as OfferItem[]).sort((a, b) => order.indexOf(a.station) - order.indexOf(b.station));
@@ -28,18 +28,21 @@ export default async function OfferPrep({ params, searchParams }: { params: Prom
   ]);
   const ids = <><input type="hidden" name="lead_id" value={id} /><input type="hidden" name="proposal_id" value={pid} /></>;
   const pending = p.req_status === "pending";
+  const locked = !!p.sent_at;
   const offers = (past ?? []) as unknown as { id: string; final_total: number; valid_until: string; created_at: string; profiles: { full_name: string } | null }[];
 
   return (
     <main className="wrap" style={{ maxWidth: 900 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-        <h1>Προσφορά για τον πελάτη</h1>
+        <h1>Προσφορά για τον πελάτη <span className="badge gray" style={{ verticalAlign: "middle" }}>{p.code}</span></h1>
         <Link href={`/leads/${id}/proposal/${pid}`} className="muted">← {p.title}: {lead.company_name}</Link>
       </div>
       <Flash sp={sp} />
       <p className="muted" style={{ marginTop: 0 }}>Το PDF που θα στείλεις: εξώφυλλο, πίνακας ανά ραδιόφωνο με το σύνολο, κλείσιμο. Ισχύει {VALID_DAYS} ημέρες από την έκδοση. Τα ποσά έρχονται από την πρόταση και δεν αλλάζουν εδώ.</p>
 
-      <form action={saveOfferTexts} className="card stack">
+      {locked && <div className="msg" style={{ background: "var(--orange-bg)" }}><strong>🔒 Η πρόταση {p.code} έχει εκδοθεί για αποστολή και είναι κλειδωμένη.</strong> Η προσφορά της βρίσκεται από κάτω, όπως ακριβώς βγήκε. Για αλλαγή, γύρνα στην πρόταση και πάτα «Αντίγραφο».</div>}
+
+      {!locked && <form action={saveOfferTexts} className="card stack">
         {ids}
         <h2 style={{ margin: 0 }}>1. Τι θα διαβάσει ο πελάτης</h2>
         <label>Τίτλος καμπάνιας (κάτω από το όνομά του)<input name="subtitle" defaultValue={p.offer_subtitle ?? ""} placeholder={autoSubtitle(items)} maxLength={120} /></label>
@@ -54,9 +57,9 @@ export default async function OfferPrep({ params, searchParams }: { params: Prom
         })}
         <div className="muted" style={{ fontSize: 13 }}>Άφησε κενό για να μπει το κείμενο που προτείνει το CRM (φαίνεται με γκρι). Γράψε δικό σου όπου θέλεις, π.χ. «100 FREE SPOT».</div>
         <div><SubmitButton pending="Αποθήκευση…">Αποθήκευση κειμένων</SubmitButton></div>
-      </form>
+      </form>}
 
-      <form action={uploadLogo} className="card stack">
+      {!locked && <form action={uploadLogo} className="card stack">
         {ids}
         <h2 style={{ margin: 0 }}>2. Λογότυπο πελάτη</h2>
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,10 +68,10 @@ export default async function OfferPrep({ params, searchParams }: { params: Prom
         <label>{lg?.data ? "Αλλαγή λογοτύπου" : "Ανέβασε λογότυπο"} (PNG, JPG ή WEBP, έως 700 KB)<input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required /></label>
         <div className="muted" style={{ fontSize: 13 }}>Μένει στον πελάτη και μπαίνει μόνο του στις επόμενες προσφορές.</div>
         <div><SubmitButton pending="Ανέβασμα…">Αποθήκευση λογοτύπου</SubmitButton></div>
-      </form>
+      </form>}
 
-      <div className="card stack">
-        <h2 style={{ margin: 0 }}>3. Έκδοση</h2>
+      {!locked && <div className="card stack">
+        <h2 style={{ margin: 0 }}>3. Έλεγχος και έκδοση</h2>
         <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span>Τελική τιμή προς τον πελάτη{Number(tot?.final_total ?? 0) < Number(tot?.list_total ?? 0) ? <> <span className="muted">(από {eur(Number(tot?.list_total))})</span></> : null}</span>
           <strong style={{ fontSize: 22 }}>{eur(Number(tot?.final_total ?? 0))}</strong>
@@ -80,14 +83,20 @@ export default async function OfferPrep({ params, searchParams }: { params: Prom
         {pending ? (
           <div className="msg" style={{ background: "var(--orange-bg)" }}>Υπάρχει αίτημα ειδικής τιμής σε αναμονή. Η προσφορά βγαίνει μόλις απαντηθεί.</div>
         ) : (
-          <form action={issueOffer}>{ids}<SubmitButton pending="Ετοιμάζεται…">Έκδοση προσφοράς και PDF</SubmitButton></form>
+          <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <Link href={`/offer/preview/${pid}`} className="btn secondary">Προεπισκόπηση</Link>
+            {items.length > 0 && <form action={issueOffer}>{ids}<SubmitButton pending="Κλειδώνει…">🔒 Έκδοση για αποστολή</SubmitButton></form>}
+          </div>
         )}
-        <div className="muted" style={{ fontSize: 13 }}>Αποθήκευσε πρώτα τα κείμενα. Κάθε έκδοση κρατιέται από κάτω όπως ακριβώς βγήκε. Το PDF το στέλνεις εσύ από το email σου.</div>
-      </div>
+        <div className="muted" style={{ fontSize: 13 }}>
+          <strong>Προεπισκόπηση:</strong> βλέπεις πώς θα βγει, με τη λέξη «ΠΡΟΣΧΕΔΙΟ» επάνω. Δεν κλειδώνει τίποτα.<br />
+          <strong>Έκδοση για αποστολή:</strong> βγαίνει το PDF με κωδικό {p.code} και η πρόταση <strong>κλειδώνει οριστικά</strong>. Μετά, αλλαγή γίνεται μόνο με καινούργια πρόταση. Αποθήκευσε πρώτα τα κείμενα. Το PDF το στέλνεις εσύ από το email σου.
+        </div>
+      </div>}
 
       {offers.length > 0 && (
         <div className="card">
-          <h2>Προσφορές που έχουν βγει ({offers.length})</h2>
+          <h2>{locked ? "Η προσφορά που στάλθηκε" : `Προσφορές που έχουν βγει (${offers.length})`}</h2>
           <div className="list">
             {offers.map((o) => (
               <Link key={o.id} href={`/offer/${o.id}`} className="item">

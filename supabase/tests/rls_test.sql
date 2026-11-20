@@ -516,4 +516,32 @@ do $$ begin
   assert (select count(*) from proposal_offers) = 1, 'δεν αποθηκεύτηκε η προσφορά';
 end $$;
 
+-- 29. Κωδικός και κλείδωμα πρότασης
+select as_user(3);
+insert into proposals (id, lead_id, client_type, title) values ('e1000000-0000-0000-0000-000000000001','d0000000-0000-0000-0000-000000000001','local','Κλείδωμα');
+insert into proposal_items (id, proposal_id, station, kind, title, monthly_amount, months) values ('e2000000-0000-0000-0000-000000000001','e1000000-0000-0000-0000-000000000001','NRG','package','Πακέτο',350,1);
+do $$ declare c text; begin
+  select code into c from proposals where id = 'e1000000-0000-0000-0000-000000000001';
+  assert c ~ '^KMG-[0-9]{4}-[0-9]{4}$', 'λάθος μορφή κωδικού: ' || coalesce(c, 'null');
+  assert (select count(distinct code) from proposals) = (select count(*) from proposals), 'διπλός κωδικός';
+  begin update proposals set sent_at = now() where id = 'e1000000-0000-0000-0000-000000000001'; assert false, 'κλείδωσε χωρίς έκδοση';
+  exception when insufficient_privilege then null; end;
+  perform lock_proposal('e1000000-0000-0000-0000-000000000001');
+  begin update proposal_items set months = 5 where id = 'e2000000-0000-0000-0000-000000000001'; assert false, 'άλλαξε γραμμή κλειδωμένης';
+  exception when insufficient_privilege then null; end;
+  begin insert into proposal_items (proposal_id, station, kind, title, monthly_amount) values ('e1000000-0000-0000-0000-000000000001','ΣΟΚ FM','package','x',1); assert false, 'μπήκε γραμμή σε κλειδωμένη';
+  exception when insufficient_privilege then null; end;
+  begin update proposals set prepay = true where id = 'e1000000-0000-0000-0000-000000000001'; assert false, 'άλλαξε προπληρωμή σε κλειδωμένη';
+  exception when insufficient_privilege then null; end;
+  begin update proposals set sent_at = null where id = 'e1000000-0000-0000-0000-000000000001'; assert false, 'ξεκλείδωσε';
+  exception when insufficient_privilege then null; end;
+  update proposals set title = 'Κλείδωμα (σταλμένη)' where id = 'e1000000-0000-0000-0000-000000000001';
+end $$;
+select as_user(1);
+do $$ begin
+  begin update proposal_items set months = 5 where id = 'e2000000-0000-0000-0000-000000000001'; assert false, 'ο Νίκος άλλαξε κλειδωμένη';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;
