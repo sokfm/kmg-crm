@@ -9,6 +9,7 @@ import { NewTaskForm, TASK_SELECT, TaskList, type TaskRow } from "@/components/T
 import { StagePath } from "@/components/MoveDialog";
 import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
 import { toggleInterest } from "../../proposal-actions";
+import { VoiceNote } from "@/components/VoiceNote";
 import { CLIENT_LABEL, itemTotal, type ClientType, type Item } from "@/lib/pricing";
 
 const SOURCES: Record<string, string> = {
@@ -129,6 +130,9 @@ export default async function LeadPage({
 
           {tab === "activity" ? (
             <>
+              {["new", "contacted", "meeting", "proposal", "negotiation"].includes(lead.status) && (
+                <div style={{ marginBottom: 14 }}><VoiceNote leadId={lead.id} version={lead.version} stage={lead.status} today={t} /></div>
+              )}
               <form action={addActivity} className="stack sf-composer" id="log">
                 <input type="hidden" name="lead_id" value={lead.id} />
                 <div className="seg">
