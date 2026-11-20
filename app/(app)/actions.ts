@@ -63,6 +63,15 @@ export async function createLead(f: FormData) {
     }
   }
 
+  // Δίχτυ για διπλό πάτημα: αν μόλις (τελευταία 3 λεπτά) άνοιξε ίδιο lead, ανοίγουμε εκείνο αντί να φτιάξουμε δεύτερο
+  {
+    const since = new Date(Date.now() - 3 * 60000).toISOString();
+    let q = supabase.from("leads").select("id").not("status", "in", "(won,lost)").gte("created_at", since).order("created_at", { ascending: false }).limit(1);
+    q = customerId ? q.eq("customer_id", customerId) : q.eq("company_name", company!);
+    const { data: twin } = await q;
+    if (twin && twin.length) redirect(`/leads/${twin[0].id}?ok=created`);
+  }
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
