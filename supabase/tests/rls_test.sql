@@ -658,4 +658,39 @@ do $$ declare r record; begin
 end $$;
 reset role;
 
+-- 37. Χαμένο lead: ημερομηνία «ξαναχτυπάμε», «όχι ποτέ» χωρίς επανάληψη, εργασία όταν έρθει η μέρα
+select as_user(1);
+insert into leads (id, company_name, owner_id, next_step, next_step_due) values
+ ('d7000000-0000-0000-0000-000000000001','ΧΑΜΕΝΟ ΤΩΡΑ','00000000-0000-0000-0000-000000000003','x', current_date + 1),
+ ('d7000000-0000-0000-0000-000000000002','ΧΑΜΕΝΟ ΠΟΤΕ','00000000-0000-0000-0000-000000000003','x', current_date + 1),
+ ('d7000000-0000-0000-0000-000000000003','ΧΑΜΕΝΟ ΑΛΛΟΥ','00000000-0000-0000-0000-000000000003','x', current_date + 1);
+select as_user(3);
+update leads set status = 'lost', lost_kind = 'not_now', lost_reason = 'μετά τις γιορτές' where id = 'd7000000-0000-0000-0000-000000000001';
+update leads set status = 'lost', lost_kind = 'never' where id = 'd7000000-0000-0000-0000-000000000002';
+update leads set status = 'lost', lost_kind = 'competitor', competitor_until = (now() at time zone 'Europe/Athens')::date + 60 where id = 'd7000000-0000-0000-0000-000000000003';
+do $$ declare td date := (now() at time zone 'Europe/Athens')::date; begin
+  assert (select reknock_on from leads where id = 'd7000000-0000-0000-0000-000000000001') = td + 90, 'όχι τώρα: λάθος ημερομηνία επανάληψης';
+  assert (select reknock_on from leads where id = 'd7000000-0000-0000-0000-000000000002') is null, 'όχι ποτέ: μπήκε επανάληψη';
+  assert (select reknock_on from leads where id = 'd7000000-0000-0000-0000-000000000003') = td + 46, 'άλλος σταθμός: όχι 14 ημέρες πριν τη λήξη';
+end $$;
+reset role;
+alter table leads disable trigger user;
+update leads set reknock_on = (now() at time zone 'Europe/Athens')::date where id in ('d7000000-0000-0000-0000-000000000001','d7000000-0000-0000-0000-000000000002');
+alter table leads enable trigger user;
+do $$ declare n int; begin
+  if (now() at time zone 'Europe/Athens')::time >= time '09:00' and (now() at time zone 'Europe/Athens')::time < time '20:00' then
+    perform make_reminders(); perform make_reminders();
+    select count(*) into n from tasks where source = 'reknock' and status = 'open';
+    assert n = 1, 'εργασίες «ξαναχτύπα»: περίμενα 1, βρήκα ' || n;
+    assert (select count(*) from tasks where source = 'reknock' and lead_id = 'd7000000-0000-0000-0000-000000000001' and owner_id = '00000000-0000-0000-0000-000000000003' and title like 'Ξαναχτύπα: ΧΑΜΕΝΟ ΤΩΡΑ%Όχι τώρα%') = 1, 'λάθος εργασία';
+  end if;
+end $$;
+select as_user(3);
+update leads set status = 'contacted', next_step = 'ξανά', next_step_due = current_date + 2 where id = 'd7000000-0000-0000-0000-000000000001';
+do $$ begin
+  assert (select reknock_on from leads where id = 'd7000000-0000-0000-0000-000000000001') is null, 'ξανάνοιξε αλλά έμεινε ημερομηνία επανάληψης';
+  assert (select count(*) from tasks where source = 'reknock' and status = 'open') = 0, 'ξανάνοιξε αλλά η εργασία έμεινε ανοιχτή';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

@@ -83,6 +83,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     return [...m.entries()].filter(([, v]) => v.cur || v.prev).sort((a, b) => b[1].cur - a[1].cur);
   }
   const names = new Map((people ?? []).map((p) => [p.id, p.full_name]));
+  // Γιατί χάνουμε: χαμένα leads της χρονιάς ανά είδος «όχι» και ανά Account Executive
+  const { data: lostRows } = await supabase.from("leads").select("lost_kind, owner_id, expected_value, reknock_on").eq("status", "lost").gte("closed_at", `${Y}-01-01`).lt("closed_at", `${Y + 1}-01-01`);
+  const lost = (lostRows ?? []) as { lost_kind: string | null; owner_id: string | null; expected_value: number | null; reknock_on: string | null }[];
+  const LOSTK: [string, string][] = [["not_now", "Όχι τώρα"], ["no_budget", "Όχι budget"], ["competitor", "Πήγε σε άλλον σταθμό"], ["never", "Όχι ποτέ"]];
+  const lostOwners = [...new Set(lost.map((l) => l.owner_id ?? ""))].sort((a, b) => (names.get(a) ?? "ω").localeCompare(names.get(b) ?? "ω"));
+  const lostVal = (f: (l: (typeof lost)[number]) => boolean) => lost.filter(f).reduce((s, l) => s + Number(l.expected_value ?? 0), 0);
   // Πελάτες χωρίς υπεύθυνο (π.χ. της βάσης, παλιών πωλητών) μετράνε στον Νίκο
   const ceoId = (people ?? []).find((p) => p.role === "ceo")?.id;
   const agencyNames = new Map((agencies ?? []).map((a) => [a.id, a.name]));
@@ -211,6 +217,31 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           link={(k) => (agencyId.get(k) ? `/agencies/${agencyId.get(k)}` : null)}
         />
       </div>
+
+      {lost.length > 0 && (
+        <div className="card">
+          <h2>Γιατί χάνουμε · {Y}</h2>
+          <p className="muted" style={{ marginTop: 0 }}>{lost.length === 1 ? "1 χαμένο lead" : `${lost.length} χαμένα leads`} · αξία που χάθηκε {eur(lostVal(() => true))} · {lost.filter((l) => l.reknock_on).length} έχουν ημερομηνία για να ξαναχτυπήσουμε την πόρτα.</p>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Τι «όχι» ήταν</th><th className="num">Leads</th><th className="num">Αξία</th>{lostOwners.map((o) => <th key={o} className="num">{o ? (names.get(o) ?? "—").split(" ")[0] : "Χωρίς AE"}</th>)}</tr></thead>
+              <tbody>
+                {LOSTK.map(([k, label]) => {
+                  const n = lost.filter((l) => l.lost_kind === k).length;
+                  return (
+                    <tr key={k}>
+                      <td>{label}</td>
+                      <td className="num"><strong>{n}</strong> <span className="muted">{lost.length ? `${Math.round((n / lost.length) * 100)}%` : ""}</span></td>
+                      <td className="num">{eur(lostVal((l) => l.lost_kind === k))}</td>
+                      {lostOwners.map((o) => <td key={o} className="num muted">{lost.filter((l) => l.lost_kind === k && (l.owner_id ?? "") === o).length || ""}</td>)}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h2>Τζίρος ανά έτος</h2>

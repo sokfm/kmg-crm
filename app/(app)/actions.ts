@@ -129,6 +129,11 @@ export async function updateLead(f: FormData) {
     lost_kind: status === "lost" ? s(f, "lost_kind") : null,
     lost_reason: status === "lost" ? s(f, "lost_reason") : null,
   };
+  // Χαμένο από την καρτέλα: η ημερομηνία του «Πότε» είναι το πότε ξαναχτυπάμε την πόρτα
+  if (status === "lost") {
+    const d = s(f, "next_step_due");
+    if (patch.lost_kind !== "never" && d && d > new Date().toISOString().slice(0, 10)) patch.reknock_on = d;
+  }
   if (status === "won" || status === "lost") {
     patch.next_step = s(f, "next_step");
   }
@@ -154,6 +159,10 @@ export async function moveLead(f: FormData) {
     patch.lost_kind = s(f, "lost_kind");
     patch.lost_reason = s(f, "lost_reason");
     if (!patch.lost_kind) back(to, { error: "Διάλεξε τι «όχι» ήταν" });
+    // Πότε ξαναχτυπάμε την πόρτα (η βάση βάζει 90 ημέρες αν μείνει κενό· στο «Όχι ποτέ» το αφαιρεί)
+    const iso = (k: string) => { const v = s(f, k); return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null; };
+    patch.competitor_until = patch.lost_kind === "competitor" ? iso("competitor_until") : null;
+    patch.reknock_on = patch.lost_kind === "never" ? null : iso("reknock_on");
   } else {
     patch.lost_kind = null;
     patch.lost_reason = null;

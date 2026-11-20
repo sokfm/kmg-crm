@@ -20,6 +20,9 @@ const plus = (n: number) => new Date(Date.now() + n * 86400000).toISOString().sl
 // Παράθυρο αλλαγής σταδίου: κάθε ανοιχτό στάδιο ζητά επόμενο βήμα, το «Χάθηκε» ζητά είδος «όχι».
 export function MoveDialog({ card, to: initial, today, back, onClose }: { card: Movable; to: string; today: string; back: string; onClose: () => void }) {
   const [to, setTo] = useState(initial);
+  const [kind, setKind] = useState("");
+  const [until, setUntil] = useState("");
+  const minus14 = (d: string) => { const x = new Date(Date.parse(`${d}T00:00:00Z`) - 14 * 86400000).toISOString().slice(0, 10); return x > today ? x : plus(1); };
   return (
     <div className="modal-bg" onClick={onClose}>
       <form action={moveLead} className="modal stack" onClick={(e) => e.stopPropagation()}>
@@ -35,16 +38,32 @@ export function MoveDialog({ card, to: initial, today, back, onClose }: { card: 
         {to === "lost" ? (
           <>
             <label>Τι «όχι» ήταν *
-              <select name="lost_kind" required defaultValue="">
+              <select name="lost_kind" required value={kind} onChange={(e) => setKind(e.target.value)}>
                 <option value="" disabled>Διάλεξε…</option>
                 {Object.entries(LOST).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </label>
             <label>Γιατί (με δικά σου λόγια)<input name="lost_reason" /></label>
-            <div className="grid2">
-              <label>Πότε ξαναχτυπάμε την πόρτα;<input name="next_step" placeholder="π.χ. Ξανά πριν το Πάσχα" /></label>
-              <label>Ημερομηνία<input name="next_step_due" type="date" defaultValue={plus(90)} /></label>
-            </div>
+            {kind === "never" ? (
+              <p className="muted">«Όχι ποτέ»: το CRM δεν θα σου το ξαναθυμίσει. Το lead μένει στα Χαμένα με όλο το ιστορικό.</p>
+            ) : (
+              <>
+                {kind === "competitor" && (
+                  <label>Μέχρι πότε παίζει εκεί; (αν το ξέρεις)
+                    <input name="competitor_until" type="date" value={until} min={today} onChange={(e) => setUntil(e.target.value)} />
+                  </label>
+                )}
+                <div className="grid2">
+                  <label>Τι κάνουμε τότε;<input name="next_step" placeholder="π.χ. Ξανά πριν το Πάσχα" /></label>
+                  <label>Πότε ξαναχτυπάμε την πόρτα;
+                    <input key={kind + until} name="reknock_on" type="date" min={plus(1)} defaultValue={kind === "competitor" && until ? minus14(until) : plus(90)} />
+                  </label>
+                </div>
+                <p className="muted" style={{ marginTop: -6 }}>
+                  {kind === "competitor" && until ? "Προτείνω 14 ημέρες πριν λήξει η καμπάνια του εκεί. " : ""}Εκείνη τη μέρα θα σου ανοίξει μόνη της εργασία «Ξαναχτύπα» και θα σου έρθει ειδοποίηση.
+                </p>
+              </>
+            )}
           </>
         ) : to === "won" ? (
           <>

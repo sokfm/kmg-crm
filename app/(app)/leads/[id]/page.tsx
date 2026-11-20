@@ -112,7 +112,7 @@ export default async function LeadPage({
         <StagePath card={card} status={lead.status} today={t} />
         <div className="row muted" style={{ marginTop: 8, justifyContent: "space-between" }}>
           <span>
-            {lead.status === "lost" ? `Χάθηκε · ${LOST_KINDS[lead.lost_kind ?? ""] ?? ""}${lead.lost_reason ? " — " + lead.lost_reason : ""}` :
+            {lead.status === "lost" ? `Χάθηκε · ${LOST_KINDS[lead.lost_kind ?? ""] ?? ""}${lead.lost_reason ? " — " + lead.lost_reason : ""}${lead.reknock_on ? ` · 🚪 ξαναχτυπάμε ${dateGr(lead.reknock_on)}` : lead.lost_kind === "never" ? " · χωρίς επανάληψη" : ""}` :
              lead.status === "won" ? "Κλείσαμε το deal 🎉" : "Πάτα ένα στάδιο για να μετακινήσεις το lead."}
           </span>
           {lead.customer_id && <Link href={`/customers/${lead.customer_id}`}>Καρτέλα πελάτη: {lead.customers?.display_name ?? "άνοιγμα"} ›</Link>}
