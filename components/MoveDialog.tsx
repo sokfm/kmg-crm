@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { moveLead } from "@/app/(app)/actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { STAGE_INFO } from "@/lib/stages";
 
 export type Movable = { id: string; version: number; company_name: string; next_step: string | null; next_step_due: string | null; expected_value: number | null };
 
@@ -22,6 +23,8 @@ export function MoveDialog({ card, to: initial, today, back, onClose }: { card: 
   const [to, setTo] = useState(initial);
   const [kind, setKind] = useState("");
   const [until, setUntil] = useState("");
+  const [step, setStep] = useState(card.next_step ?? "");
+  const info = STAGE_INFO[to];
   const minus14 = (d: string) => { const x = new Date(Date.parse(`${d}T00:00:00Z`) - 14 * 86400000).toISOString().slice(0, 10); return x > today ? x : plus(1); };
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -74,8 +77,18 @@ export function MoveDialog({ card, to: initial, today, back, onClose }: { card: 
           </>
         ) : (
           <>
+            {info && (
+              <div className="stage-help">
+                <p><strong>Τι σημαίνει:</strong> {info.means}</p>
+                <div className="chips" role="group" aria-label="Συνηθισμένα επόμενα βήματα">
+                  {info.steps.map((t) => (
+                    <button key={t} type="button" className={`chip ${step === t ? "on" : ""}`} onClick={() => setStep(t)}>{t}</button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="grid2">
-              <label>Επόμενο βήμα *<input name="next_step" required defaultValue={card.next_step ?? ""} placeholder="π.χ. Στέλνω πρόταση" /></label>
+              <label>Επόμενο βήμα *<input name="next_step" required value={step} onChange={(e) => setStep(e.target.value)} placeholder="διάλεξε από πάνω ή γράψε δικό σου" /></label>
               <label>Πότε *<span className="row" style={{ gap: 6 }}><input name="next_step_due" type="date" required defaultValue={card.next_step_due && card.next_step_due >= today ? card.next_step_due : plus(2)} /><input name="next_step_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση" style={{ maxWidth: 120 }} defaultValue="" /></span></label>
             </div>
             <label>Εκτιμώμενη αξία (€)<input name="expected_value" inputMode="decimal" defaultValue={card.expected_value ?? ""} placeholder="π.χ. 1.500" /></label>

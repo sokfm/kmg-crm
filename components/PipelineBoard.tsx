@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { MoveDialog } from "@/components/MoveDialog";
+import { STAGE_INFO } from "@/lib/stages";
 
 export type Card = {
   id: string; version: number; company_name: string; status: string; next_step: string | null; next_step_due: string | null;
@@ -151,6 +152,7 @@ export function PipelineBoard({ cards, today, wonMonth, lostMonth }: { cards: Ca
                 <strong className="grow">{label}</strong>
                 <span className="col-n">{col.length}</span>
                 <div className="col-sum">{sum ? eur(sum) : "\u00a0"}</div>
+                <div className="col-means">{STAGE_INFO[key].means}</div>
               </header>
               {col.length === 0 && <div className="col-empty">Σύρε εδώ ένα deal</div>}
               {col.map((c) => {

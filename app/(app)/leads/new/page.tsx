@@ -4,6 +4,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { createLead } from "../../actions";
 import { Flash } from "@/components/Flash";
 import { VoiceLead } from "@/components/VoiceLead";
+import { STAGE_INFO } from "@/lib/stages";
 
 const STATIONS = ["ΣΟΚ FM", "DALKAS", "ΜΠΛΕ", "NRG", "lalala.gr", "Social"];
 
@@ -103,7 +104,7 @@ export default async function NewLead({ searchParams }: { searchParams: Promise<
           ))}
         </fieldset>
         <div className="grid2">
-          <label>Επόμενο βήμα *<input name="next_step" required defaultValue={sp.next_step} placeholder="π.χ. Τηλέφωνο για ραντεβού" /></label>
+          <label>Επόμενο βήμα *<input name="next_step" required defaultValue={sp.next_step} list="new-steps" placeholder="π.χ. Πρώτη κλήση" /><datalist id="new-steps">{STAGE_INFO.new.steps.map((t) => <option key={t} value={t} />)}</datalist></label>
           <label>Πότε *<span className="row" style={{ gap: 6 }}><input name="next_step_due" type="date" required defaultValue={sp.next_step_due ?? tomorrow} /><input name="next_step_time" type="time" aria-label="Ώρα (προαιρετικά)" title="Ώρα (προαιρετικά): θα χτυπήσει υπενθύμιση" style={{ maxWidth: 120 }} defaultValue={sp.next_step_time ?? ""} /></span></label>
         </div>
         <label>Εκτιμώμενη αξία (€, αν την ξέρεις)<input name="expected_value" inputMode="decimal" placeholder="π.χ. 1.500" defaultValue={sp.expected_value} /></label>
