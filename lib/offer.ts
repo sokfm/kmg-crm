@@ -13,9 +13,9 @@ export const VALID_DAYS = 15;
 export type OfferItem = {
   id: string; station: string; kind: "package" | "plan"; title: string; detail: string | null; long_detail: string | null;
   monthly_amount: number; long_months: number | null; long_amount: number | null; months: number; qty: number;
-  spots: number | null; sec: number | null; spots_day: number | null; long_spots_day: number | null; offer_text: string | null;
+  spots: number | null; sec: number | null; plan?: Record<string, number[]> | null; start_date?: string | null; spots_day: number | null; long_spots_day: number | null; offer_text: string | null;
 };
-export type OfferRow = { station: string; period: string; title: string; sub: string | null; c1: string; c2: string; price: number };
+export type OfferRow = { station: string; period: string; title: string; sub: string | null; c1: string; c1sub?: string | null; c2: string; price: number };
 export type Snapshot = {
   code?: string; company: string; subtitle: string; local: boolean; rows: OfferRow[];
   list: number; final: number; reasons: string[]; totalSpots: number;
@@ -24,6 +24,35 @@ export type Snapshot = {
 
 const n = (v: number) => new Intl.NumberFormat("el-GR", { maximumFractionDigits: 1 }).format(v);
 export const months = (m: number) => (m === 1 ? "1 μήνας" : `${m} μήνες`);
+
+// Πλάνο: πόσα σποτ παίζουν τις ημέρες που ΕΧΕΙ σποτ, και ποιες ημέρες της εβδομάδας είναι αυτές.
+// Π.χ. πλάνο Δευτέρα–Παρασκευή με 4 σποτ → «4» και «Δευτ.–Παρ.», όχι 88 σποτ ÷ 30 ημέρες = 2,9.
+const DOW = ["Κυρ.", "Δευτ.", "Τρ.", "Τετ.", "Πέμ.", "Παρ.", "Σάβ."];
+export function planDays(i: Pick<OfferItem, "plan" | "start_date" | "spots">): { perDay: string; days: string | null } | null {
+  if (!i.plan) return null;
+  const tot = Array.from({ length: 30 }, () => 0);
+  for (const row of Object.values(i.plan)) for (let d = 0; d < 30; d++) tot[d] += Math.max(0, Math.floor(Number(row?.[d]) || 0));
+  const active = tot.filter((v) => v > 0);
+  if (!active.length) return null;
+  const lo = Math.min(...active), hi = Math.max(...active);
+  const perDay = lo === hi ? n(lo) : `${n(lo)}–${n(hi)}`;
+  if (!i.start_date) return { perDay, days: null };
+  const start = new Date(`${i.start_date.slice(0, 10)}T00:00:00Z`).getUTCDay();
+  const on = new Set<number>();
+  tot.forEach((v, d) => { if (v > 0) on.add((start + d) % 7); });
+  if (on.size === 7) return { perDay, days: "καθημερινά" };
+  // Σειρά Δευτέρα → Κυριακή, και συνεχόμενες ημέρες ως «από–έως»
+  const week = [1, 2, 3, 4, 5, 6, 0].filter((d) => on.has(d));
+  const pos = (d: number) => (d + 6) % 7;
+  const parts: string[] = [];
+  for (let a = 0; a < week.length; ) {
+    let b = a;
+    while (b + 1 < week.length && pos(week[b + 1]) === pos(week[b]) + 1) b++;
+    parts.push(b - a >= 2 ? `${DOW[week[a]]}–${DOW[week[b]]}` : week.slice(a, b + 1).map((d) => DOW[d]).join(", "));
+    a = b + 1;
+  }
+  return { perDay, days: parts.join(", ") };
+}
 
 // Το κείμενο που προτείνει το CRM για μια γραμμή (ο Account Executive μπορεί να το αλλάξει)
 export function defaultText(i: OfferItem): { title: string; sub: string | null } {
@@ -48,12 +77,14 @@ export function buildRows(items: OfferItem[], type: ClientType): { rows: OfferRo
     const spots = i.kind === "plan" ? (i.spots ?? 0) * i.months : perDay != null ? perDay * 30 * i.months : 0;
     totalSpots += spots;
     const secs = spots * (i.sec ?? 0);
+    const pd = i.kind === "plan" ? planDays(i) : null;
     return {
       station: i.station,
       period: months(i.months),
       title: i.offer_text?.trim() || def.title,
       sub: i.offer_text?.trim() ? null : def.sub,
-      c1: local ? (perDay != null ? n(perDay) : "—") : i.sec ? `${i.sec}''` : "—",
+      c1: local ? (pd ? pd.perDay : perDay != null ? n(perDay) : "—") : i.sec ? `${i.sec}''` : "—",
+      c1sub: local && pd ? pd.days : null,
       c2: local ? (spots ? n(spots) : "—") : secs ? new Intl.NumberFormat("el-GR", { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(t.total / secs) + " €" : "—",
       price: t.total,
     };

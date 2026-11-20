@@ -1,6 +1,6 @@
 import { STATION_LOGO, STATION_NAME, dateLong, type Snapshot } from "@/lib/offer";
 
-const eur = (v: number) => new Intl.NumberFormat("el-GR", { maximumFractionDigits: 2 }).format(v) + " €";
+const eur = (v: number) => new Intl.NumberFormat("el-GR", { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 }).format(v) + "\u00a0€";
 const CSS = `
 @page { size: 1280px 720px; margin: 0; }
 .offer, .offer * { box-sizing: border-box; }
@@ -39,7 +39,7 @@ const CSS = `
 .offer .total .lbl { font-weight: 800; font-size: 18px; } .offer .total .lbl span { display: block; font-weight: 500; font-size: 13px; color: #6d6e73; }
 .offer .total .grow { flex: 1; }
 .offer .total .old { font-size: 19px; color: #8a8b90; text-decoration: line-through; }
-.offer .total .new { font-size: 38px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
+.offer .total .new { font-size: 38px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; white-space: nowrap; }
 .offer .save { background: var(--yellow); color: #2f2f33; font-weight: 800; padding: 8px 14px; border-radius: 999px; font-size: 16px; white-space: nowrap; }
 .offer .foot { position: absolute; left: 340px; right: 48px; bottom: 28px; display: flex; align-items: flex-end; gap: 24px; }
 .offer .foot ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: #55565A; flex: 1; }
@@ -108,7 +108,7 @@ export function OfferDoc({ s, logo, draft }: { s: Snapshot; logo: string | null;
                   <td><img src={STATION_LOGO[r.station]} alt={STATION_NAME[r.station] ?? r.station} /></td>
                   <td className="d" style={{ whiteSpace: "nowrap" }}>{r.period}</td>
                   <td><div className="d">{r.title}</div>{r.sub && <div className="s">{r.sub}</div>}</td>
-                  <td className="numc">{r.c1}</td>
+                  <td className="numc">{r.c1}{r.c1sub && <span style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#6d6e73", whiteSpace: "nowrap" }}>({r.c1sub})</span>}</td>
                   <td className="numc">{r.c2}</td>
                   <td>{eur(r.price)}</td>
                 </tr>
