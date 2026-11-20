@@ -42,8 +42,10 @@ export default async function CustomerPage({
   const { data: propData } = leadIds.length
     ? await supabase.from("proposals").select("id, lead_id, title, created_at, proposal_items(station, monthly_amount, long_months, long_amount, months)").in("lead_id", leadIds).order("created_at", { ascending: false })
     : { data: [] };
+  const { data: totData } = leadIds.length ? await supabase.from("proposal_totals").select("proposal_id, final_total").in("lead_id", leadIds) : { data: [] };
+  const finals = new Map((totData ?? []).map((r) => [r.proposal_id as string, Number(r.final_total)]));
   const custProps = ((propData ?? []) as { id: string; lead_id: string; title: string; created_at: string; proposal_items: { station: string; monthly_amount: number; long_months: number | null; long_amount: number | null; months: number }[] }[])
-    .map((p) => ({ ...p, total: p.proposal_items.reduce((x, i) => x + itemTotal(i).total, 0), stations: [...new Set(p.proposal_items.map((i) => i.station))] }));
+    .map((p) => ({ ...p, total: finals.get(p.id) ?? p.proposal_items.reduce((x, i) => x + itemTotal(i).total, 0), stations: [...new Set(p.proposal_items.map((i) => i.station))] }));
 
 
   // Οι αυθεντικές εγγραφές του Excel (όνομα / Account Executive / Agent), ομαδοποιημένες

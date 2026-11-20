@@ -5,7 +5,7 @@ import { Flash } from "@/components/Flash";
 import { SubmitButton } from "@/components/SubmitButton";
 import { AutoSelect } from "@/components/AutoSelect";
 import { CLIENT_HINT, CLIENT_LABEL, STATIONS, itemTotal, type ClientType, type Item } from "@/lib/pricing";
-import { addPackageItem, copyProposal, deleteItem, deleteProposal, renameProposal, setClientType, setItemMonths, setMainProposal } from "../../../../proposal-actions";
+import { addPackageItem, copyProposal, decideDiscount, deleteItem, deleteProposal, renameProposal, requestDiscount, setClientType, setItemMonths, setMainProposal, togglePrepay } from "../../../../proposal-actions";
 
 type Pkg = {
   id: string; station: string; kind: "spots" | "sponsorship" | "mention"; client_type: string; name: string; description: string | null;
@@ -21,10 +21,10 @@ export default async function ProposalPage({
 }: { params: Promise<{ id: string; pid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id, pid } = await params;
   const sp = await searchParams;
-  const { supabase } = await requireProfile();
+  const { supabase, isAdmin } = await requireProfile();
   const { data: lead } = await supabase.from("leads").select("id, company_name, customer_id, customers(agency_id)").eq("id", id).maybeSingle();
   if (!lead) notFound();
-  const { data: p } = await supabase.from("proposals").select("id, client_type, title, is_main, version, proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
+  const { data: p } = await supabase.from("proposals").select("id, client_type, title, is_main, version, prepay, req_amount, req_reason, req_status, decided_note, requester:profiles!proposals_req_by_fkey(full_name), decider:profiles!proposals_decided_by_fkey(full_name), proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
   if (!p) notFound();
   const type = (p?.client_type ?? null) as ClientType | null;
   const items = ((p?.proposal_items ?? []) as Item[]).sort((a, b) => STATIONS.indexOf(a.station as (typeof STATIONS)[number]) - STATIONS.indexOf(b.station as (typeof STATIONS)[number]));
@@ -39,6 +39,11 @@ export default async function ProposalPage({
   // Πακέτα σποτ και χορηγίες υπάρχουν μόνο για τοπικούς· αναφορές για όλους εκτός από κρατικές
   const pkgs = ((pk ?? []) as Pkg[]).filter((x) => (type === "local" ? true : type === "government" ? false : x.kind === "mention"));
   const budget = items.reduce((a, i) => a + itemTotal(i).total, 0);
+  const { data: tot } = await supabase.from("proposal_totals").select("list_total, combo_pct, prepay_pct, book_total, final_total").eq("proposal_id", pid).maybeSingle();
+  const T = { list: Number(tot?.list_total ?? budget), combo: Number(tot?.combo_pct ?? 0), prepay: Number(tot?.prepay_pct ?? 0), book: Number(tot?.book_total ?? budget), final: Number(tot?.final_total ?? budget) };
+  const afterCombo = Math.round(T.list * (100 - T.combo)) / 100;
+  const requester = (p.requester as unknown as { full_name: string } | null)?.full_name ?? "Account Executive";
+  const decider = (p.decider as unknown as { full_name: string } | null)?.full_name ?? "";
   const perStation = STATIONS.map((st) => ({ st, sum: items.filter((i) => i.station === st).reduce((a, i) => a + itemTotal(i).total, 0) })).filter((x) => x.sum > 0);
 
   return (
@@ -133,11 +138,65 @@ export default async function ProposalPage({
                 {perStation.length > 1 && perStation.map((x) => (
                   <div key={x.st} className="row muted" style={{ justifyContent: "space-between" }}><span>{x.st}</span><span>{eur(x.sum)}</span></div>
                 ))}
-                <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                  <strong>Συνολικό μπάτζετ</strong>
-                  <span style={{ fontSize: 26, fontWeight: 800 }}>{eur(budget)}</span>
+                <div className="row" style={{ justifyContent: "space-between" }}><span>Τιμή τιμοκαταλόγου</span><strong>{eur(T.list)}</strong></div>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <span>Combo 8% <span className="muted">· πάνω από ένα ραδιόφωνο</span></span>
+                  {T.combo ? <strong>− {eur(T.list - afterCombo)}</strong> : <span className="muted">δεν ισχύει (ένα ραδιόφωνο)</span>}
                 </div>
-                <div className="muted" style={{ fontSize: 13 }}>Χωρίς ΦΠΑ και χωρίς εκπτώσεις. Οι εκπτώσεις θα μπαίνουν εδώ, πάνω στο σύνολο.</div>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <form action={togglePrepay} className="row" style={{ gap: 8, alignItems: "center" }}>
+                    {ids}<input type="hidden" name="version" value={p.version} /><input type="hidden" name="prepay" value={p.prepay ? "0" : "1"} />
+                    <span>Προπληρωμή 10%</span>
+                    <button type="submit" className={p.prepay ? "" : "secondary"} style={{ padding: "5px 12px" }} aria-pressed={p.prepay}>{p.prepay ? "✓ Ναι" : "Όχι"}</button>
+                  </form>
+                  {T.prepay ? <strong>− {eur(afterCombo - T.book)}</strong> : <span className="muted">—</span>}
+                </div>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid #ebe8ef", paddingTop: 8, marginTop: 6 }}>
+                  <strong>{p.req_status === "approved" ? "Τιμή by the book" : "Συνολικό μπάτζετ"}</strong>
+                  <span style={p.req_status === "approved" ? { fontSize: 16, textDecoration: "line-through", color: "var(--muted)" } : { fontSize: 26, fontWeight: 800 }}>{eur(T.book)}</span>
+                </div>
+                {p.req_status === "approved" && (
+                  <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+                    <strong>Συνολικό μπάτζετ <span className="badge good">ειδική τιμή</span></strong>
+                    <span style={{ fontSize: 26, fontWeight: 800 }}>{eur(T.final)}</span>
+                  </div>
+                )}
+                <div className="muted" style={{ fontSize: 13 }}>Χωρίς ΦΠΑ. Το 8% και το 10% είναι by the book και δεν θέλουν έγκριση.</div>
+
+                <div style={{ border: "1px solid #ebe8ef", borderRadius: 12, padding: 12, marginTop: 10 }} className="stack">
+                  <strong>Ειδική τιμή (θέλει έγκριση)</strong>
+                  {p.req_status === "pending" && (
+                    <>
+                      <div className="msg" style={{ background: "var(--orange-bg)" }}>
+                        <strong>Αναμένει έγκριση:</strong> {requester} ζητάει <strong>{eur(Number(p.req_amount))}</strong> αντί {eur(T.book)} (−{eur(T.book - Number(p.req_amount))}, {(100 * (1 - Number(p.req_amount) / T.book)).toFixed(1).replace(".", ",")}%).
+                        <br />Λόγος: {p.req_reason}
+                      </div>
+                      {isAdmin ? (
+                        <form action={decideDiscount} className="stack">
+                          {ids}
+                          <label>Σχόλιο (προαιρετικό)<input name="note" maxLength={200} /></label>
+                          <div className="row" style={{ gap: 8 }}>
+                            <button type="submit" name="decision" value="approve">Έγκριση {eur(Number(p.req_amount))}</button>
+                            <button type="submit" name="decision" value="reject" className="secondary">Απόρριψη</button>
+                          </div>
+                        </form>
+                      ) : <div className="muted">Θα ειδοποιηθείς μόλις απαντήσει ο Νίκος ή η Γιάννα. Μέχρι τότε ισχύει η τιμή by the book.</div>}
+                    </>
+                  )}
+                  {p.req_status === "approved" && <div className="msg ok">Εγκρίθηκε {eur(Number(p.req_amount))}{decider ? ` από ${decider}` : ""}. Λόγος: {p.req_reason}{p.decided_note ? ` · Σχόλιο: ${p.decided_note}` : ""}. Αν αλλάξεις κάτι στην πρόταση, η έγκριση ακυρώνεται.</div>}
+                  {p.req_status === "rejected" && <div className="msg error">Δεν εγκρίθηκε η τιμή {eur(Number(p.req_amount))}{decider ? ` (${decider})` : ""}{p.decided_note ? `: ${p.decided_note}` : "."} Ισχύει η τιμή by the book.</div>}
+                  {p.req_status !== "pending" && p.req_status !== "approved" && (
+                    <form action={requestDiscount} className="stack">
+                      {ids}
+                      <div className="muted">{isAdmin ? "Βάλε την τελική τιμή και τον λόγο. Ισχύει αμέσως." : "Ο πελάτης θέλει καλύτερη τιμή; Γράψε πόσο και γιατί, και πάει για έγκριση στον Νίκο και τη Γιάννα."}</div>
+                      <div className="grid2">
+                        <label>Τελική τιμή που ζητάς (€, χωρίς ΦΠΑ)<input name="amount" inputMode="decimal" required placeholder={String(Math.floor(T.book / 50) * 50 || "")} /></label>
+                        <label>Λόγος<input name="reason" required maxLength={300} placeholder="π.χ. Ο πελάτης θέλει 1.000 για να το κλείσει σήμερα" /></label>
+                      </div>
+                      <div><SubmitButton pending="Αποστολή…">{isAdmin ? "Ορισμός ειδικής τιμής" : "Ζήτα έγκριση"}</SubmitButton></div>
+                    </form>
+                  )}
+                </div>
               </div>
             )}
           </div>

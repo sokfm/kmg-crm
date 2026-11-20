@@ -457,4 +457,44 @@ do $$ begin
 end $$;
 reset role;
 
+-- 27. Εκπτώσεις: 8% combo + 10% προπληρωμή by the book· ειδική τιμή μόνο με έγκριση admin
+select as_user(1);
+insert into leads (id, company_name, owner_id, next_step, next_step_due) values ('d0000000-0000-0000-0000-000000000001','ΤΕΣΤ ΕΚΠΤΩΣΗ','00000000-0000-0000-0000-000000000003','x', current_date + 1);
+select as_user(3);
+insert into proposals (id, lead_id, client_type) values ('d1000000-0000-0000-0000-000000000001','d0000000-0000-0000-0000-000000000001','local');
+insert into proposal_items (proposal_id, station, kind, title, monthly_amount, months) values
+ ('d1000000-0000-0000-0000-000000000001','ΣΟΚ FM','plan','Πλάνο',1000,1),('d1000000-0000-0000-0000-000000000001','DALKAS','package','Πακέτο',400,1);
+do $$ begin
+  assert (select book_total from proposal_totals where proposal_id = 'd1000000-0000-0000-0000-000000000001') = 1288, 'combo 8%: 1400 -> 1288';
+end $$;
+update proposals set prepay = true where id = 'd1000000-0000-0000-0000-000000000001';
+do $$ begin
+  assert (select book_total from proposal_totals where proposal_id = 'd1000000-0000-0000-0000-000000000001') = 1159.20, 'combo + προπληρωμή: 1159,20';
+  begin update proposals set req_status = 'approved', req_amount = 500 where id = 'd1000000-0000-0000-0000-000000000001'; assert false, 'πωλητής ενέκρινε μόνος του';
+  exception when insufficient_privilege then null; end;
+  begin perform decide_discount('d1000000-0000-0000-0000-000000000001', true); assert false, 'πωλητής κάλεσε έγκριση';
+  exception when insufficient_privilege then null; end;
+  assert request_discount('d1000000-0000-0000-0000-000000000001', 1100, 'Ο πελάτης θέλει 1100 για να κλείσει') = 'pending', 'το αίτημα δεν μπήκε σε αναμονή';
+end $$;
+reset role;
+do $$ begin
+  assert (select expected_value from leads where id = 'd0000000-0000-0000-0000-000000000001') = 1159.20, 'αίτημα σε αναμονή άλλαξε την αξία';
+  assert (select count(*) from notifications where kind = 'discount_request') = 2, 'δεν ειδοποιήθηκαν Νίκος και Γιάννα';
+end $$;
+select as_user(2);
+select decide_discount('d1000000-0000-0000-0000-000000000001', true, 'οκ');
+reset role;
+do $$ begin
+  assert (select final_total from proposal_totals where proposal_id = 'd1000000-0000-0000-0000-000000000001') = 1100, 'η εγκεκριμένη τιμή δεν ισχύει';
+  assert (select expected_value from leads where id = 'd0000000-0000-0000-0000-000000000001') = 1100, 'η εγκεκριμένη τιμή δεν πήγε στο lead';
+  assert (select count(*) from notifications where kind = 'discount_decided' and user_id = '00000000-0000-0000-0000-000000000003') = 1, 'ο πωλητής δεν ειδοποιήθηκε';
+end $$;
+select as_user(3);
+update proposal_items set months = 2 where proposal_id = 'd1000000-0000-0000-0000-000000000001' and station = 'DALKAS';
+reset role;
+do $$ begin
+  assert (select req_status from proposals where id = 'd1000000-0000-0000-0000-000000000001') is null, 'άλλαξε η πρόταση αλλά έμεινε η έγκριση';
+  assert (select expected_value from leads where id = 'd0000000-0000-0000-0000-000000000001') = 1490.40, 'μετά την αλλαγή: 1800 x 0,92 x 0,9 = 1490,40';
+end $$;
+
 select 'ALL TESTS PASSED' as result;

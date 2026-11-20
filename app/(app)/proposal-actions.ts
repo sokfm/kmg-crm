@@ -231,3 +231,51 @@ export async function deleteItem(f: FormData) {
   revalidatePath(pp(leadId, pid)); revalidatePath(`/leads/${leadId}`);
   go(pp(leadId, pid), { ok: "itemdeleted" });
 }
+
+// ---------- Εκπτώσεις ----------
+const msg = (e: { message?: string } | null) => {
+  const m = e?.message ?? "";
+  return /[Α-Ωα-ω]/.test(m) ? m : FAIL; // τα μηνύματα της βάσης είναι ήδη στα ελληνικά
+};
+const euro = (v: string | null) => {
+  if (!v) return null;
+  const n = Number(v.replace(/[€\s]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+// Προπληρωμή: 10% by the book
+export async function togglePrepay(f: FormData) {
+  const { supabase } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const { data, error } = await supabase.from("proposals").update({ prepay: s(f, "prepay") === "1" }).eq("id", pid).eq("version", Number(s(f, "version"))).select("id");
+  if (error) go(pp(leadId, pid), { error: msg(error) });
+  if (!data || data.length === 0) go(pp(leadId, pid), { conflict: "1" });
+  revalidatePath(pp(leadId, pid)); revalidatePath(`/leads/${leadId}`); revalidatePath("/pipeline");
+  go(pp(leadId, pid), { ok: "saved" });
+}
+
+// Ο Account Executive ζητάει ειδική τιμή με αιτιολογία
+export async function requestDiscount(f: FormData) {
+  const { supabase } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const amount = euro(s(f, "amount"));
+  if (!amount) go(pp(leadId, pid), { error: "Γράψε την τιμή που ζητάει ο πελάτης (π.χ. 1000)" });
+  const { data, error } = await supabase.rpc("request_discount", { p_id: pid, p_amount: amount, p_reason: s(f, "reason") ?? "" });
+  if (error) go(pp(leadId, pid), { error: msg(error) });
+  revalidatePath(pp(leadId, pid)); revalidatePath(`/leads/${leadId}`); revalidatePath("/pipeline");
+  go(pp(leadId, pid), { ok: data === "approved" ? "discapproved" : "discasked" });
+}
+
+// Ο Νίκος ή η Γιάννα εγκρίνει ή απορρίπτει
+export async function decideDiscount(f: FormData) {
+  const { supabase } = await requireProfile();
+  const leadId = s(f, "lead_id")!;
+  const pid = s(f, "proposal_id")!;
+  const ok = s(f, "decision") === "approve";
+  const { error } = await supabase.rpc("decide_discount", { p_id: pid, p_ok: ok, p_note: s(f, "note") });
+  if (error) go(pp(leadId, pid), { error: msg(error) });
+  revalidatePath(pp(leadId, pid)); revalidatePath(`/leads/${leadId}`); revalidatePath("/pipeline");
+  go(pp(leadId, pid), { ok: ok ? "discapproved" : "discrejected" });
+}
