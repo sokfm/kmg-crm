@@ -19,7 +19,7 @@ export default async function AgencyPage({
 
   const [{ data: acts }, { data: custs }, { data: taskData }] = await Promise.all([
     supabase.from("activities").select("id, type, summary, occurred_at").eq("agency_id", id).order("occurred_at", { ascending: false }).limit(50),
-    supabase.from("customers").select("id, display_name, status, last_period, lifetime_revenue").eq("agency_id", id).order("lifetime_revenue", { ascending: false }),
+    supabase.from("customers_x").select("id, display_name, status, last_period, lifetime_revenue, rev_ok").eq("agency_id", id).order("lifetime_revenue", { ascending: false, nullsFirst: false }),
     supabase.from("tasks").select(TASK_SELECT).eq("agency_id", id).eq("status", "open").order("due_date"),
   ]);
   const tasks = (taskData ?? []) as unknown as TaskRow[];
@@ -81,7 +81,7 @@ export default async function AgencyPage({
           {(custs ?? []).map((c) => (
             <Link key={c.id} href={`/customers/${c.id}`} className="item">
               <div className="grow">{c.display_name}<div className="muted">{customerState(c).label} · τελευταία: {periodGr(c.last_period)}</div></div>
-              <span className="badge gray">{eur(c.lifetime_revenue)}</span>
+              <span className="badge gray">{c.rev_ok ? eur(Number(c.lifetime_revenue ?? 0)) : "🔒"}</span>
             </Link>
           ))}
           {(custs ?? []).length === 0 && <p className="muted">Κανένας ακόμα.</p>}

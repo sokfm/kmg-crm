@@ -11,7 +11,7 @@ export default async function Search({ searchParams }: { searchParams: Promise<R
   const key = searchKey(q);
   const [c, l, a] = q
     ? await Promise.all([
-        supabase.from("customers").select("id, display_name, status, last_period, lifetime_revenue").like("name_key", `%${key || "~"}%`).order("lifetime_revenue", { ascending: false }).limit(15),
+        supabase.from("customers_x").select("id, display_name, status, last_period, lifetime_revenue, rev_ok").like("name_key", `%${key || "~"}%`).order("lifetime_revenue", { ascending: false, nullsFirst: false }).limit(15),
         supabase.from("leads").select("id, company_name, status, contact_name").or(`${key ? `name_key.like.%${key}%,` : ""}email.ilike.%${q}%,phone.ilike.%${q}%`).limit(15),
         supabase.from("agencies").select("id, name").like("name_key", `%${key || "~"}%`).limit(5),
       ])
@@ -41,7 +41,7 @@ export default async function Search({ searchParams }: { searchParams: Promise<R
         {customers.map((x) => (
           <Link key={x.id} href={`/customers/${x.id}`} className="item">
             <span className="grow"><span className="title">{x.display_name}</span><div className="muted">{customerState(x).label} · τελευταία {periodGr(x.last_period)}</div></span>
-            <span className="badge gray">{eur(x.lifetime_revenue)}</span>
+            <span className="badge gray">{x.rev_ok ? eur(Number(x.lifetime_revenue ?? 0)) : "🔒"}</span>
           </Link>
         ))}
       </div>

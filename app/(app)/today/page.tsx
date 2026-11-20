@@ -67,6 +67,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<Re
   let rev = { month: 0, monthPrev: 0, ytd: 0, ytdPrev: 0 };
   let team: { id: string; name: string; contacts: number; late: number }[] = [];
   let toAssign = 0, toApprove = 0, toMerge = 0;
+  const toAccess = isAdmin ? (await supabase.from("customer_access").select("id", { count: "exact", head: true }).eq("status", "pending")).count ?? 0 : 0;
   if (isAdmin) {
     const [rows, a, m, c, acts, people] = await Promise.all([
       fetchRevenue(supabase, [nowY, nowY - 1]),
@@ -163,8 +164,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<Re
         </Link>
       </div>
 
-      {isAdmin && (toAssign > 0 || toApprove > 0 || toMerge > 0) && (
+      {isAdmin && (toAssign > 0 || toApprove > 0 || toMerge > 0 || toAccess > 0) && (
         <div className="row">
+          {toAccess > 0 && <Link href="/access" className="badge late">🔑 {toAccess === 1 ? "1 αίτημα πρόσβασης σε πελάτη" : `${toAccess} αιτήματα πρόσβασης σε πελάτες`}</Link>}
           {toAssign > 0 && <Link href="/leads?view=unassigned" className="badge late">{toAssign === 1 ? "1 lead για ανάθεση" : `${toAssign} leads για ανάθεση`}</Link>}
           {toApprove > 0 && <Link href="/customers?status=base" className="badge late">{toApprove === 1 ? "1 αίτημα από τη βάση" : `${toApprove} αιτήματα από τη βάση`}</Link>}
           {toMerge > 0 && <Link href="/merges" className="badge gray">{toMerge} ομάδες πελατών για Merge</Link>}

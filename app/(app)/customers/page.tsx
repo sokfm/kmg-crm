@@ -14,9 +14,9 @@ const SORTS: Record<string, [string, boolean]> = {
 };
 
 type Row = {
-  id: string; display_name: string; category: string | null; status: string; closed_at: string | null; served_by: string | null; is_group: boolean; parent: { display_name: string } | null; channel: string; agency: string | null; agency_id: string | null;
-  last_period: string | null; lifetime_revenue: number; revenue_by_year: Record<string, number> | null; stations: string[] | null;
-  owner_id: string | null; profiles: { full_name: string } | null;
+  id: string; display_name: string; category: string | null; status: string; closed_at: string | null; served_by: string | null; is_group: boolean; parent_name: string | null; rev_ok: boolean; detail_ok: boolean; channel: string; agency: string | null; agency_id: string | null;
+  last_period: string | null; lifetime_revenue: number | null; revenue_by_year: Record<string, number> | null; stations: string[] | null;
+  owner_id: string | null; owner_name: string | null; profiles?: { full_name: string } | null;
 };
 
 export default async function Customers({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -29,8 +29,8 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   const nowY = new Date().getFullYear();
 
   let q = supabase
-    .from("customers")
-    .select("id, display_name, category, status, closed_at, served_by, is_group, parent:parent_id(display_name), channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, profiles!customers_owner_id_fkey(full_name)", { count: "exact" })
+    .from("customers_x")   // κατάλογος: όλοι οι πελάτες, ο τζίρος μόνο όπου επιτρέπεται
+    .select("id, display_name, category, status, closed_at, served_by, is_group, parent_name, channel, agency, agency_id, last_period, lifetime_revenue, revenue_by_year, stations, owner_id, owner_name, rev_ok, detail_ok", { count: "exact" })
     .order(SORTS[sort][0], { ascending: SORTS[sort][1], nullsFirst: false })
     .order("lifetime_revenue", { ascending: false })
     .range(page * PAGE, page * PAGE + PAGE - 1);
@@ -49,7 +49,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   if (sp.agency) q = q.eq("agency_id", sp.agency);
   if (sp.q && searchKey(sp.q)) q = q.like("name_key", `%${searchKey(sp.q)}%`);
   const { data, count } = await q;
-  const rows = (data ?? []) as unknown as Row[];
+  const rows = ((data ?? []) as unknown as Row[]).map((r) => ({ ...r, profiles: r.owner_name ? { full_name: r.owner_name } : null }));
 
   const [{ data: people }, { data: agencies }, { data: pend }] = await Promise.all([
     isAdmin
@@ -89,7 +89,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           )}
         </div>
         <div className="row">
-          {isAdmin && chip("all", "Όλοι")}
+          {chip("all", "Όλοι")}
           {chip("onair", "On Air")}
           {chip("recent", "Recent · 12 μήνες")}
           {chip("inactive", "Inactive · 1–3 χρόνια")}
@@ -98,6 +98,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
           {chip("mine", "Οι δικοί μου")}
           {isAdmin && chip("closed", "Κλειστές επιχειρήσεις")}
         </div>
+        {!isAdmin && <div className="muted" style={{ fontSize: 13 }}>🔒 Ο τζίρος φαίνεται μόνο σε πελάτες που έχεις τρέξει εσύ. Για άλλον πελάτη, άνοιξέ τον και ζήτα πρόσβαση. <Link href="/access">Τα αιτήματά μου ›</Link></div>}
         <form className="row">
           <input type="hidden" name="status" value={status} />
           <input type="hidden" name="sort" value={sort} />
@@ -171,12 +172,12 @@ export default async function Customers({ searchParams }: { searchParams: Promis
               return (
                 <tr key={c.id}>
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" style={{ width: 17, height: 17 }} /></td>}
-                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link>{c.is_group && <span className="badge onair" style={{ marginLeft: 6 }}>Group</span>}{c.parent && <div className="muted" style={{ fontSize: 12 }}>Group: {c.parent.display_name}</div>}<div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
+                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link>{c.is_group && <span className="badge onair" style={{ marginLeft: 6 }}>Group</span>}{c.parent_name && <div className="muted" style={{ fontSize: 12 }}>Group: {c.parent_name}</div>}<div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
                   <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>
-                  <td className="num hide-m">{ly ? eur(c.revenue_by_year?.[ly] ?? 0) : "—"}</td>
-                  <td className="num"><strong>{eur(c.lifetime_revenue)}</strong></td>
+                  <td className="num hide-m">{!c.rev_ok ? <span className="muted" title="Κλειδωμένο">🔒</span> : ly ? eur(c.revenue_by_year?.[ly] ?? 0) : "—"}</td>
+                  <td className="num">{c.rev_ok ? <strong>{eur(Number(c.lifetime_revenue ?? 0))}</strong> : <span className="muted" title="Ο τζίρος φαίνεται μόνο σε πελάτες που έχεις τρέξει εσύ. Άνοιξε τον πελάτη για να ζητήσεις πρόσβαση.">🔒</span>}</td>
                   <td className="hide-m muted">{(c.stations ?? []).join(", ")}</td>
                   <td className="hide-m">{aeLabel(c, true) ?? <span className="muted">—{c.served_by ? ` · πριν: ${c.served_by}` : ""}</span>}</td>
                   <td className="hide-m">{c.agency_id ? <Link href={`/agencies/${c.agency_id}`}>{c.agency}</Link> : <span className="muted">{CHANNEL[c.channel] === "Media Shop" ? c.agency ?? "" : ""}</span>}</td>

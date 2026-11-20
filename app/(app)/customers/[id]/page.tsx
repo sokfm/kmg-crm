@@ -3,6 +3,7 @@ import { itemTotal } from "@/lib/pricing";
 import { SubmitButton } from "@/components/SubmitButton";
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
+import { AccessLock, type MyAccess } from "@/components/AccessLock";
 import { ACTIVITY, CHANNEL, STAGES, dateGr, eur, periodGr, customerState, aeLabel } from "@/lib/format";
 import { addActivity, decideWeb, leaveGroupAction, makeGroupAction, renameCustomer, setGroupAction, updateCustomerInfo, webLookup } from "../../actions";
 import { PERSON_SELECT, PeopleCard, type Person } from "@/components/People";
@@ -20,12 +21,35 @@ export default async function CustomerPage({
   const sp = await searchParams;
   const tab = ["activity", "history"].includes(sp.tab) ? sp.tab : "info";
   const { supabase, isAdmin, profile } = await requireProfile();
-  const { data: c } = await supabase
-    .from("customers")
-    .select("*, profiles!customers_owner_id_fkey(full_name), parent:parent_id(id, display_name)")
-    .eq("id", id)
-    .maybeSingle();
-  if (!c) notFound();
+  // Από τον κατάλογο: ο πελάτης υπάρχει για όλους, αλλά στοιχεία και τζίρος έρχονται μόνο αν επιτρέπεται
+  const { data: cx } = await supabase.from("customers_x").select("*").eq("id", id).maybeSingle();
+  if (!cx) notFound();
+  const c = { ...cx, profiles: cx.owner_name ? { full_name: cx.owner_name as string } : null, parent: cx.parent_id ? { id: cx.parent_id as string, display_name: cx.parent_name as string } : null };
+  const { data: myAcc } = isAdmin ? { data: null } : await supabase.from("customer_access")
+    .select("status, reason, decided_note, expires_at, requested_at").eq("customer_id", id).eq("user_id", profile.id).order("requested_at", { ascending: false }).limit(1).maybeSingle();
+  const mine = (myAcc ?? null) as MyAccess;
+  const openUntil = mine?.status === "approved" && mine.expires_at && Date.parse(mine.expires_at) > Date.now() ? mine.expires_at : null;
+
+  // Πελάτης άλλου Account Executive χωρίς έγκριση: μόνο ότι υπάρχει και σε ποιον ανήκει
+  if (!c.detail_ok) {
+    return (
+      <main className="wrap" style={{ maxWidth: 760 }}>
+        <div>
+          <Link href="/customers" className="muted">← Πελάτες</Link>
+          <h1 style={{ margin: 0 }}>{c.display_name}</h1>
+          <div className="muted">{CHANNEL[c.channel]}{c.agency ? ` · ${c.agency}` : ""} · {customerState(c).label} · Account Executive: {aeLabel(c) ?? c.served_by ?? "κανείς"}</div>
+        </div>
+        <Flash sp={sp} />
+        <div className="grid2">
+          <div className="card"><div className="muted">Πελάτης από</div><div className="kpi">{periodGr(c.first_period)}</div></div>
+          <div className="card"><div className="muted">Τελευταία καμπάνια</div><div className="kpi">{periodGr(c.last_period)}</div></div>
+          <div className="card"><div className="muted">Σταθμοί</div><div className="kpi" style={{ fontSize: 16 }}>{(c.stations ?? []).join(", ") || "—"}</div></div>
+          <div className="card"><div className="muted">Τζίρος</div><div className="kpi">🔒</div></div>
+        </div>
+        <AccessLock customerId={c.id} what="Η καρτέλα αυτού του πελάτη είναι κλειδωμένη για σένα" mine={mine} />
+      </main>
+    );
+  }
 
   const [{ data: leads }, { data: acts }, { data: lines }] = await Promise.all([
     supabase.from("leads").select("id, status, next_step, next_step_due").eq("customer_id", id).order("created_at", { ascending: false }),
@@ -70,9 +94,10 @@ export default async function CustomerPage({
   // Group: brands από κάτω και συνολικά νούμερα· Brand: τα πρόσωπα του Group
   type Brand = { id: string; display_name: string; lifetime_revenue: number; last_period: string | null; revenue_by_year: Record<string, number> | null; served_by: string | null; status: string; closed_at: string | null; profiles: { full_name: string } | null };
   const { data: brandData } = c.is_group
-    ? await supabase.from("customers").select("id, display_name, lifetime_revenue, last_period, revenue_by_year, served_by, status, closed_at, profiles!customers_owner_id_fkey(full_name)").eq("parent_id", c.id).order("lifetime_revenue", { ascending: false })
+    ? await supabase.from("customers_x").select("id, display_name, lifetime_revenue, last_period, revenue_by_year, served_by, status, closed_at, owner_name, rev_ok").eq("parent_id", c.id).order("lifetime_revenue", { ascending: false, nullsFirst: false })
     : { data: [] };
-  const brands = (brandData ?? []) as unknown as Brand[];
+  const brands = ((brandData ?? []) as unknown as (Brand & { owner_name: string | null; rev_ok: boolean })[]).map((b) => ({ ...b, profiles: b.owner_name ? { full_name: b.owner_name } : null }));
+  const revOk = !!c.rev_ok && brands.every((b) => b.rev_ok);
   const parent = c.parent as { id: string; display_name: string } | null;
   const { data: groupPeopleData } = parent ? await supabase.from("contacts").select(PERSON_SELECT).eq("customer_id", parent.id) : { data: [] };
   const groupPeople = (groupPeopleData ?? []) as Person[];
@@ -110,6 +135,8 @@ export default async function CustomerPage({
         </div>
       </div>
       <Flash sp={sp} />
+      {!revOk && <AccessLock customerId={c.id} what="Ο τζίρος και το ιστορικό τιμολόγησης αυτού του πελάτη είναι κλειδωμένα" mine={mine} />}
+      {openUntil && <div className="msg" style={{ background: "var(--orange-bg)" }}>🔓 Έχεις πρόσβαση σε αυτόν τον πελάτη έως {dateGr(openUntil)}. Μετά ξανακλειδώνει.</div>}
       {isAdmin && (
         <details>
           <summary className="muted" style={{ cursor: "pointer" }}>✏️ Αλλαγή ονόματος</summary>
@@ -123,7 +150,7 @@ export default async function CustomerPage({
       )}
 
       <div className="grid2">
-        <div className="card"><div className="muted">{c.is_group ? "Συνολικός τζίρος Group" : "Συνολικός τζίρος"}</div><div className="kpi">{eur(totalRevenue)}</div></div>
+        <div className="card"><div className="muted">{c.is_group ? "Συνολικός τζίρος Group" : "Συνολικός τζίρος"}</div><div className="kpi">{revOk ? eur(totalRevenue) : "🔒"}</div></div>
         <div className="card"><div className="muted">Πελάτης από</div><div className="kpi">{periodGr(c.first_period)}</div></div>
         <div className="card"><div className="muted">Τελευταία καμπάνια</div><div className="kpi">{periodGr(lastAll)}</div></div>
         <div className="card"><div className="muted">Σταθμοί</div><div className="kpi" style={{ fontSize: 16 }}>{(c.stations ?? []).join(", ") || "—"}</div></div>
@@ -152,7 +179,7 @@ export default async function CustomerPage({
                 <span className="grow"><strong>{b.display_name}</strong><div className="muted">AE: {b.profiles?.full_name ?? (b.served_by?.startsWith("Media shop") ? b.served_by : "βάση")}</div></span>
                 <span className={`badge ${st.cls}`}>{st.label}</span>
                 <span className="muted hide-s">{periodGr(b.last_period)}</span>
-                <strong>{eur(b.lifetime_revenue)}</strong>
+                {b.rev_ok ? <strong>{eur(Number(b.lifetime_revenue ?? 0))}</strong> : <span className="muted">🔒</span>}
               </Link>
             );
           })}
@@ -310,6 +337,7 @@ export default async function CustomerPage({
 
       {tab === "history" && (
         <>
+      {!revOk && <p className="muted">🔒 Το ιστορικό τιμολόγησης ανοίγει με έγκριση. Η «Τελευταία καμπάνια» επάνω δείχνει πότε έπαιξε τελευταία φορά.</p>}
       {byYear.length > 0 && (
         <div className="card">
           <h2>Τζίρος ανά έτος</h2>

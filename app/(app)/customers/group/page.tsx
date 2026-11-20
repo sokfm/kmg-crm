@@ -14,10 +14,10 @@ export default async function GroupCustomers({ searchParams }: { searchParams: P
   const raw = sp.ids ?? [];
   const ids = (Array.isArray(raw) ? raw : raw.split(",")).filter((x) => /^[0-9a-f-]{36}$/.test(x));
   const [{ data }, { data: groups }] = await Promise.all([
-    supabase.from("customers").select("id, display_name, is_group, last_period, lifetime_revenue, parent:parent_id(display_name)").in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]).order("lifetime_revenue", { ascending: false }),
+    supabase.from("customers_x").select("id, display_name, is_group, last_period, lifetime_revenue, parent_name").in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]).order("lifetime_revenue", { ascending: false }),
     supabase.from("customers").select("id, display_name").eq("is_group", true).order("display_name"),
   ]);
-  const rows = (data ?? []) as unknown as { id: string; display_name: string; is_group: boolean; last_period: string | null; lifetime_revenue: number; parent: { display_name: string } | null }[];
+  const rows = (data ?? []) as unknown as { id: string; display_name: string; is_group: boolean; last_period: string | null; lifetime_revenue: number; parent_name: string | null }[];
   const brands = rows.filter((r) => !r.is_group);
   const pickedGroup = rows.find((r) => r.is_group);
   const flash = Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]));
@@ -38,7 +38,7 @@ export default async function GroupCustomers({ searchParams }: { searchParams: P
           <div className="list">
             {brands.map((b) => (
               <div key={b.id} className="item">
-                <span className="grow"><strong>{b.display_name}</strong><div className="muted">τελευταία {periodGr(b.last_period)}{b.parent ? ` · τώρα στο Group ${b.parent.display_name}` : ""}</div></span>
+                <span className="grow"><strong>{b.display_name}</strong><div className="muted">τελευταία {periodGr(b.last_period)}{b.parent_name ? ` · τώρα στο Group ${b.parent_name}` : ""}</div></span>
                 <span className="badge gray">{eur(b.lifetime_revenue)}</span>
               </div>
             ))}

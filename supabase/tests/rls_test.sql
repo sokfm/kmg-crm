@@ -599,4 +599,63 @@ do $$ declare n int; begin
 end $$;
 reset role;
 
+-- 36. Τζίρος κλειδωμένος: όλοι οι πελάτες φαίνονται στον κατάλογο, ο τζίρος μόνο σε όσους έτρεξε ο ίδιος ή με έγκριση
+reset role;
+update customers set lifetime_revenue = 5000, revenue_by_year = '{"2025": 5000}', served_by = null where id in ('10000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000003');
+update customers set owner_id = '00000000-0000-0000-0000-000000000003', status = 'active' where id = '10000000-0000-0000-0000-000000000001';
+update customers set owner_id = '00000000-0000-0000-0000-000000000004', status = 'active' where id = '10000000-0000-0000-0000-000000000002';
+update customers set owner_id = null, status = 'base' where id = '10000000-0000-0000-0000-000000000003';
+update customers set served_by = 'Κώστας Σταμουλάκης' where id = '40000000-0000-0000-0000-000000000001';
+select as_user(3);
+do $$ declare n int; r record; begin
+  select count(*) into n from customers_x;
+  assert n >= 3, 'ο Κώστας δεν βλέπει όλους τους πελάτες στον κατάλογο: ' || n;
+  select * into r from customers_x where id = '10000000-0000-0000-0000-000000000001';   -- δικός του
+  assert r.rev_ok and r.lifetime_revenue = 5000 and r.detail_ok, 'δεν βλέπει τζίρο στον δικό του';
+  select * into r from customers_x where id = '10000000-0000-0000-0000-000000000003';   -- βάση
+  assert r.detail_ok and not r.rev_ok and r.lifetime_revenue is null and r.revenue_by_year is null, 'βλέπει τζίρο πελάτη της βάσης';
+  select * into r from customers_x where id = '10000000-0000-0000-0000-000000000002';   -- της Μαρίας
+  assert r.display_name = 'ΤΗΝΙΑΚΟΣ' and not r.detail_ok and not r.rev_ok and r.lifetime_revenue is null and r.phone is null, 'βλέπει στοιχεία ή τζίρο πελάτη άλλου';
+  select * into r from customers_x where id = '40000000-0000-0000-0000-000000000001';   -- βάση, αλλά την έτρεξε τελευταίος ο ίδιος
+  assert r.rev_ok and r.lifetime_revenue is not null, 'δεν βλέπει τζίρο σε πελάτη που έτρεξε ο ίδιος';
+  begin perform lifetime_revenue from customers where id = '10000000-0000-0000-0000-000000000003'; assert false, 'διάβασε τζίρο απευθείας από τον πίνακα';
+  exception when insufficient_privilege then null; end;
+  perform display_name from customers where id = '10000000-0000-0000-0000-000000000003';   -- τα υπόλοιπα διαβάζονται
+  select count(*) into n from customers where id = '10000000-0000-0000-0000-000000000002';
+  assert n = 0, 'διάβασε την καρτέλα πελάτη άλλου χωρίς έγκριση';
+  begin perform decide_customer_access(gen_random_uuid(), true); assert false, 'ο Κώστας έδωσε πρόσβαση';
+  exception when insufficient_privilege then null; end;
+  perform request_customer_access('10000000-0000-0000-0000-000000000002', 'Θέλω να του προτείνω combo');
+end $$;
+select as_user(2);
+do $$ begin
+  begin perform decide_customer_access((select id from customer_access where status = 'pending' limit 1), true); assert false, 'η Γιάννα έδωσε πρόσβαση';
+  exception when insufficient_privilege then null; end;
+end $$;
+select as_user(1);
+select decide_customer_access((select id from customer_access where status = 'pending' limit 1), true);
+select as_user(3);
+do $$ declare r record; n int; begin
+  select * into r from customers_x where id = '10000000-0000-0000-0000-000000000002';
+  assert r.detail_ok and r.rev_ok and r.lifetime_revenue = 5000, 'η έγκριση δεν άνοιξε την καρτέλα';
+  select count(*) into n from customers where id = '10000000-0000-0000-0000-000000000002';
+  assert n = 1, 'η έγκριση δεν άνοιξε τον πελάτη';
+  assert (select count(*) from notifications where user_id = '00000000-0000-0000-0000-000000000003' and kind = 'access_decided') = 1, 'δεν ειδοποιήθηκε ο Κώστας';
+end $$;
+reset role;
+update customer_access set expires_at = now() - interval '1 minute';
+select as_user(3);
+do $$ declare r record; begin
+  select * into r from customers_x where id = '10000000-0000-0000-0000-000000000002';
+  assert not r.detail_ok and not r.rev_ok and r.lifetime_revenue is null, 'η πρόσβαση δεν έληξε';
+end $$;
+select as_user(5);
+do $$ begin assert (select count(*) from customers_x) = 0, 'η υποδοχή digital βλέπει τον κατάλογο πελατών'; end $$;
+select as_user(1);
+do $$ declare r record; begin
+  select * into r from customers_x where id = '10000000-0000-0000-0000-000000000002';
+  assert r.rev_ok and r.lifetime_revenue = 5000, 'ο Νίκος δεν βλέπει τζίρο';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

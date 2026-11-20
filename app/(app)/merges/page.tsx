@@ -25,7 +25,7 @@ export default async function Merges({ searchParams }: { searchParams: Promise<R
     const { data: al } = await supabase.from("customer_aliases").select("customer_id").in("source_customer_id", g.source_customer_ids);
     const ids = [...new Set((al ?? []).map((a) => a.customer_id))];
     const { data: cs } = await supabase
-      .from("customers")
+      .from("customers_x")
       .select("id, display_name, lifetime_revenue, last_period, status")
       .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
       .order("lifetime_revenue", { ascending: false });

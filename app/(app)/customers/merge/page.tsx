@@ -14,13 +14,13 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
   const raw = sp.ids ?? [];
   const ids = (Array.isArray(raw) ? raw : raw.split(",")).filter((x) => /^[0-9a-f-]{36}$/.test(x));
   const { data } = await supabase
-    .from("customers")
-    .select("id, display_name, status, last_period, first_period, lifetime_revenue, stations, agency, profiles!customers_owner_id_fkey(full_name)")
+    .from("customers_x")
+    .select("id, display_name, status, last_period, first_period, lifetime_revenue, stations, agency, owner_name")
     .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
     .order("lifetime_revenue", { ascending: false });
   const rows = (data ?? []) as unknown as {
     id: string; display_name: string; status: string; last_period: string | null; first_period: string | null;
-    lifetime_revenue: number; stations: string[] | null; agency: string | null; profiles: { full_name: string } | null;
+    lifetime_revenue: number; stations: string[] | null; agency: string | null; owner_name: string | null;
   }[];
   const flash = Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]));
 
@@ -46,7 +46,7 @@ export default async function MergeCustomers({ searchParams }: { searchParams: P
                   <strong>{c.display_name}</strong>
                   <div className="muted">
                     {customerState(c).label} · {periodGr(c.first_period)} – {periodGr(c.last_period)} · {(c.stations ?? []).join(", ")}
-                    {c.agency ? ` · ${c.agency}` : ""} · {c.profiles?.full_name ?? "χωρίς Account Executive"}
+                    {c.agency ? ` · ${c.agency}` : ""} · {c.owner_name ?? "χωρίς Account Executive"}
                   </div>
                 </span>
                 <span className="badge gray">{eur(c.lifetime_revenue)}</span>

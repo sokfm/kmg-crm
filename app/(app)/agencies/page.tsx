@@ -6,7 +6,7 @@ export default async function Agencies() {
   const { supabase } = await requireProfile();
   const [{ data: agencies }, { data: custs }] = await Promise.all([
     supabase.from("agencies").select("id, name, domains").order("name"),
-    supabase.from("customers").select("agency_id, lifetime_revenue, status").not("agency_id", "is", null),
+    supabase.from("customers_x").select("agency_id, lifetime_revenue, status").not("agency_id", "is", null),
   ]);
   const stats = new Map<string, { n: number; active: number; rev: number }>();
   for (const c of custs ?? []) {

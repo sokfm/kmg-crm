@@ -57,7 +57,7 @@ export default async function LeadPage({
   // Αν το lead αφορά υπάρχοντα πελάτη: το ιστορικό του από την τιμολόγηση
   const [{ data: cust }, { data: lines }] = lead.customer_id
     ? await Promise.all([
-        supabase.from("customers").select("id, display_name, lifetime_revenue, first_period, last_period, stations, revenue_by_year, agency, profiles!customers_owner_id_fkey(full_name)").eq("id", lead.customer_id).maybeSingle(),
+        supabase.from("customers_x").select("id, display_name, lifetime_revenue, first_period, last_period, stations, revenue_by_year, agency, owner_name, rev_ok").eq("id", lead.customer_id).maybeSingle(),
         supabase.from("history_lines").select("record_id, period, station, amount, amount_type, package_raw").eq("customer_id", lead.customer_id).eq("source_scope", "monthly_billing").order("period", { ascending: false }).limit(12),
       ])
     : [{ data: null }, { data: null }];
@@ -238,7 +238,7 @@ export default async function LeadPage({
               <Link href={`/customers/${cust.id}`} style={{ fontWeight: 700, fontSize: 13 }}>Καρτέλα πελάτη ›</Link>
             </div>
             <div className="sf-highlights" style={{ borderTop: 0, paddingTop: 0 }}>
-              <div><span>Συνολικός τζίρος</span><strong>{eur(cust.lifetime_revenue)}</strong></div>
+              <div><span>Συνολικός τζίρος</span><strong>{cust.rev_ok ? eur(Number(cust.lifetime_revenue ?? 0)) : "🔒 κλειδωμένος"}</strong></div>
               <div><span>Πελάτης από</span><strong>{periodGr(cust.first_period)}</strong></div>
               <div><span>Τελευταία καμπάνια</span><strong>{periodGr(cust.last_period)}</strong></div>
               <div><span>Σταθμοί</span><strong>{(cust.stations ?? []).join(", ") || "—"}</strong></div>

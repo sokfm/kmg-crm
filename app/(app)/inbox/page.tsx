@@ -60,7 +60,7 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<Re
   for (const e of items) {
     const word = sp.find === e.id && sp.q ? sp.q : guessWord(e);
     if (!word) { candidates[e.id] = []; continue; }
-    const { data: c } = await supabase.from("customers").select("id, display_name, status").ilike("display_name", `%${word}%`).order("lifetime_revenue", { ascending: false }).limit(6);
+    const { data: c } = await supabase.from("customers_x").select("id, display_name, status").ilike("display_name", `%${word}%`).order("lifetime_revenue", { ascending: false, nullsFirst: false }).limit(6);
     candidates[e.id] = c ?? [];
   }
 
