@@ -18,8 +18,8 @@ export default async function Proposals({
   const { supabase } = await requireProfile();
   const { data: lead } = await supabase.from("leads").select("id, company_name, customers(agency_id)").eq("id", id).maybeSingle();
   if (!lead) notFound();
-  const { data } = await supabase.from("proposals").select("id, code, sent_at, title, client_type, is_main, req_status, created_at, proposal_items(station, monthly_amount, long_months, long_amount, months)").eq("lead_id", id).order("created_at", { ascending: false });
-  const list = (data ?? []) as { id: string; code: string; sent_at: string | null; title: string; client_type: ClientType | null; is_main: boolean; req_status: string | null; created_at: string; proposal_items: Pick<Item, "station" | "monthly_amount" | "long_months" | "long_amount" | "months">[] }[];
+  const { data } = await supabase.from("proposals").select("id, code, sent_at, title, campaign, client_type, is_main, req_status, created_at, proposal_items(station, monthly_amount, long_months, long_amount, months)").eq("lead_id", id).order("created_at", { ascending: false });
+  const list = (data ?? []) as { id: string; code: string; sent_at: string | null; title: string; campaign: string | null; client_type: ClientType | null; is_main: boolean; req_status: string | null; created_at: string; proposal_items: Pick<Item, "station" | "monthly_amount" | "long_months" | "long_amount" | "months">[] }[];
   const { data: totData } = await supabase.from("proposal_totals").select("proposal_id, final_total").eq("lead_id", id);
   const finals = new Map((totData ?? []).map((r) => [r.proposal_id as string, Number(r.final_total)]));
   const hasAgency = !!(lead.customers as unknown as { agency_id: string | null } | null)?.agency_id;
@@ -46,7 +46,7 @@ export default async function Proposals({
               <Link key={p.id} href={`/leads/${id}/proposal/${p.id}`} className="row" style={{ justifyContent: "space-between", gap: 10, border: "1px solid #ebe8ef", borderRadius: 12, padding: 12, color: "inherit", flexWrap: "wrap" }}>
                 <div>
                   <strong>{p.title}</strong> {p.sent_at && <span className="badge gray">🔒 Στάλθηκε {dateGr(p.sent_at)}</span>} {p.is_main && <span className="badge good">Κύρια</span>} {p.req_status === "pending" && <span className="badge late">Αναμένει έγκριση</span>} {p.client_type && <span className="badge gray">{CLIENT_LABEL[p.client_type]}</span>}
-                  <div className="muted" style={{ fontSize: 13 }}>{p.code} · {dateGr(p.created_at)} · {stations.length ? stations.join(" · ") : "άδεια"}</div>
+                  <div className="muted" style={{ fontSize: 13 }}>{p.code}{p.campaign ? ` · 🎯 ${p.campaign}` : ""} · {dateGr(p.created_at)} · {stations.length ? stations.join(" · ") : "άδεια"}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 18, fontWeight: 800 }}>{eur(total)}</div>
@@ -62,7 +62,11 @@ export default async function Proposals({
       <summary style={{ cursor: "pointer", fontWeight: 800, fontSize: 17 }}>{list.length ? "+ Ξεχωριστή νέα πρόταση (π.χ. ανανέωση ή εναλλακτική)" : "Νέα πρόταση"}</summary>
       <form action={createProposal} className="stack" style={{ marginTop: 12 }}>
         <input type="hidden" name="lead_id" value={id} />
-        <label>Όνομα<input name="title" required maxLength={80} defaultValue={list.length ? "" : "Πρόταση"} placeholder="π.χ. Ανανέωση 2027, Πρόταση με DALKAS" /></label>
+        <div className="grid2">
+          <label>Για ποια καμπάνια είναι; (προαιρετικά)<input name="campaign" maxLength={120} placeholder="π.χ. Χριστούγεννα, Εγκαίνια, Ανανέωση 2027" /></label>
+          <label>Όνομα (προαιρετικά)<input name="title" maxLength={80} placeholder={`αυτόματα: ${lead.company_name} · καμπάνια ή μήνας`} /></label>
+        </div>
+        <div className="muted" style={{ marginTop: -6 }}>Κωδικός και όνομα μπαίνουν μόνα τους. Γράψε όνομα μόνο αν θες κάτι δικό σου.</div>
         <div className="muted">Τι πελάτης είναι; Ισχύει για όλα τα μέσα αυτής της πρότασης.{hasAgency ? " Η καρτέλα του έχει πρακτορείο." : ""}</div>
         {TYPES.map((t) => (
           <label key={t} className="row" style={{ gap: 10, alignItems: "flex-start", border: "1px solid #ebe8ef", borderRadius: 12, padding: 10, cursor: "pointer" }}>

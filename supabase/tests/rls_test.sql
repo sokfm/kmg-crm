@@ -742,4 +742,34 @@ do $$ declare r leads; begin
 end $$;
 reset role;
 
+-- 39. Αυτόματα ονόματα και κωδικοί σε προτάσεις και πλάνα, πεδίο καμπάνιας
+select as_user(1);
+insert into leads (id, company_name, owner_id, next_step, next_step_due) values ('d9000000-0000-0000-0000-000000000001','ΟΝΟΜΑΤΑ ΤΕΣΤ','00000000-0000-0000-0000-000000000003','x', current_date + 1);
+select as_user(3);
+insert into proposals (id, lead_id, client_type) values ('e9000000-0000-0000-0000-000000000001','d9000000-0000-0000-0000-000000000001','local');
+insert into proposals (id, lead_id, client_type) values ('e9000000-0000-0000-0000-000000000002','d9000000-0000-0000-0000-000000000001','local');
+insert into proposals (id, lead_id, client_type, campaign) values ('e9000000-0000-0000-0000-000000000003','d9000000-0000-0000-0000-000000000001','local','Χριστούγεννα');
+insert into proposals (id, lead_id, client_type, title) values ('e9000000-0000-0000-0000-000000000004','d9000000-0000-0000-0000-000000000001','local','Δικό μου όνομα');
+insert into proposal_items (id, proposal_id, station, kind, title, monthly_amount, sec, start_date) values
+ ('e9100000-0000-0000-0000-000000000001','e9000000-0000-0000-0000-000000000001','ΣΟΚ FM','plan','Πλάνο κοστολόγησης',100,25,'2026-12-01'),
+ ('e9100000-0000-0000-0000-000000000002','e9000000-0000-0000-0000-000000000001','DALKAS','plan','Πλάνο: Εγκαίνια',100,30,'2026-12-01'),
+ ('e9100000-0000-0000-0000-000000000003','e9000000-0000-0000-0000-000000000001','NRG','package','Πακέτο',100,null,null);
+do $$ declare a text; b text; pc text; begin
+  select title into a from proposals where id = 'e9000000-0000-0000-0000-000000000001';
+  select title into b from proposals where id = 'e9000000-0000-0000-0000-000000000002';
+  assert a like 'ΟΝΟΜΑΤΑ ΤΕΣΤ · % 20__', 'λάθος αυτόματο όνομα πρότασης: ' || a;
+  assert b = a || ' (2)', 'η δεύτερη πρόταση δεν πήρε (2): ' || b;
+  assert (select title from proposals where id = 'e9000000-0000-0000-0000-000000000003') = 'ΟΝΟΜΑΤΑ ΤΕΣΤ · Χριστούγεννα', 'το όνομα δεν πήρε την καμπάνια';
+  assert (select title from proposals where id = 'e9000000-0000-0000-0000-000000000004') = 'Δικό μου όνομα', 'πάτησε το όνομα που έγραψε ο χρήστης';
+  select code into pc from proposals where id = 'e9000000-0000-0000-0000-000000000001';
+  assert (select code from proposal_items where id = 'e9100000-0000-0000-0000-000000000001') = pc || '-P1', 'λάθος κωδικός πρώτου πλάνου';
+  assert (select code from proposal_items where id = 'e9100000-0000-0000-0000-000000000002') = pc || '-P2', 'λάθος κωδικός δεύτερου πλάνου';
+  assert (select code from proposal_items where id = 'e9100000-0000-0000-0000-000000000003') is null, 'το πακέτο πήρε κωδικό πλάνου';
+  assert (select title from proposal_items where id = 'e9100000-0000-0000-0000-000000000001') = 'Πλάνο: ΣΟΚ FM 25'''' · από 01/12', 'λάθος αυτόματο όνομα πλάνου: ' || (select title from proposal_items where id = 'e9100000-0000-0000-0000-000000000001');
+  assert (select title from proposal_items where id = 'e9100000-0000-0000-0000-000000000002') = 'Πλάνο: Εγκαίνια', 'πάτησε το όνομα πλάνου του χρήστη';
+  update proposal_items set sec = 30 where id = 'e9100000-0000-0000-0000-000000000001';
+  assert (select title from proposal_items where id = 'e9100000-0000-0000-0000-000000000001') = 'Πλάνο: ΣΟΚ FM 30'''' · από 01/12', 'το αυτόματο όνομα δεν ακολούθησε την αλλαγή';
+end $$;
+reset role;
+
 select 'ALL TESTS PASSED' as result;

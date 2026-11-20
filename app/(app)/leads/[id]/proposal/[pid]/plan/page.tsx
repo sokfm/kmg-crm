@@ -20,7 +20,7 @@ export default async function ProposalPlan({
 
   // Άνοιγμα αποθηκευμένου πλάνου για αλλαγή, ή νέο πλάνο για τον σταθμό
   const { data: item } = sp.item
-    ? await supabase.from("proposal_items").select("id, station, title, sec, start_date, plan, version").eq("id", sp.item).eq("proposal_id", p.id).eq("kind", "plan").maybeSingle()
+    ? await supabase.from("proposal_items").select("id, station, title, code, auto_title, sec, start_date, plan, version").eq("id", sp.item).eq("proposal_id", p.id).eq("kind", "plan").maybeSingle()
     : { data: null };
   const station = item?.station ?? sp.station;
   if (!station || !(STATIONS as readonly string[]).includes(station)) redirect(base);
@@ -47,7 +47,7 @@ export default async function ProposalPlan({
         slots={toSlots(slots)}
         defaultStart={defaultStart}
         lockStation={station}
-        initial={item ? { grid: (item.plan ?? {}) as Grid, sec: item.sec ?? 30, start: item.start_date, title: item.title.replace(/^Πλάνο: /, "").replace(/^Πλάνο κοστολόγησης$/, "") } : undefined}
+        initial={item ? { grid: (item.plan ?? {}) as Grid, sec: item.sec ?? 30, start: item.start_date, title: item.auto_title ? "" : item.title.replace(/^Πλάνο: /, "").replace(/^Πλάνο κοστολόγησης$/, "") } : undefined}
         save={{ leadId: id, proposalId: pid, itemId: item?.id, version: item?.version }}
       />
     </main>

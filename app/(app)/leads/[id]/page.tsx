@@ -48,10 +48,10 @@ export default async function LeadPage({
   const people = (peopleData ?? []) as { id: string; full_name: string }[];
   const { data: contactData } = await supabase.from("contacts").select(PERSON_SELECT).eq("lead_id", id);
   const persons = (contactData ?? []) as Person[];
-  const { data: propData } = await supabase.from("proposals").select("id, code, sent_at, title, client_type, is_main, req_status, proposal_items(station, monthly_amount, long_months, long_amount, months)").eq("lead_id", id).order("created_at", { ascending: false });
+  const { data: propData } = await supabase.from("proposals").select("id, code, sent_at, title, campaign, client_type, is_main, req_status, proposal_items(station, monthly_amount, long_months, long_amount, months)").eq("lead_id", id).order("created_at", { ascending: false });
   const { data: totData } = await supabase.from("proposal_totals").select("proposal_id, final_total").eq("lead_id", id);
   const finals = new Map((totData ?? []).map((r) => [r.proposal_id as string, Number(r.final_total)]));
-  const props = ((propData ?? []) as { id: string; code: string; sent_at: string | null; title: string; client_type: ClientType | null; is_main: boolean; req_status: string | null; proposal_items: Pick<Item, "station" | "monthly_amount" | "long_months" | "long_amount" | "months">[] }[])
+  const props = ((propData ?? []) as { id: string; code: string; sent_at: string | null; title: string; campaign: string | null; client_type: ClientType | null; is_main: boolean; req_status: string | null; proposal_items: Pick<Item, "station" | "monthly_amount" | "long_months" | "long_amount" | "months">[] }[])
     .map((p) => ({ ...p, total: finals.get(p.id) ?? p.proposal_items.reduce((x, i) => x + itemTotal(i).total, 0), stations: [...new Set(p.proposal_items.map((i) => i.station))] }));
   const interests = ((lead.interests as string[] | null) ?? [lead.product_line]) as string[];
 
@@ -307,7 +307,7 @@ export default async function LeadPage({
               <Link key={p.id} href={`/leads/${lead.id}/proposal/${p.id}`} className="row" style={{ justifyContent: "space-between", gap: 8, color: "inherit", border: "1px solid #ebe8ef", borderRadius: 10, padding: "8px 10px" }}>
                 <span>
                   <strong>{p.title}</strong> {p.sent_at && <span className="badge gray">🔒 Στάλθηκε</span>} {p.is_main && <span className="badge good">Κύρια</span>} {p.req_status === "pending" && <span className="badge late">Αναμένει έγκριση</span>}
-                  <br /><span className="muted" style={{ fontSize: 12.5 }}>{p.code} · {p.client_type ? CLIENT_LABEL[p.client_type] : ""}{p.stations.length ? ` · ${p.stations.join(" · ")}` : " · άδεια"}</span>
+                  <br /><span className="muted" style={{ fontSize: 12.5 }}>{p.code}{p.campaign ? ` · 🎯 ${p.campaign}` : ""} · {p.client_type ? CLIENT_LABEL[p.client_type] : ""}{p.stations.length ? ` · ${p.stations.join(" · ")}` : " · άδεια"}</span>
                 </span>
                 <strong>{eur(p.total)}</strong>
               </Link>

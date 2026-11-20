@@ -28,7 +28,7 @@ export default async function ProposalPage({
   const { supabase, isAdmin } = await requireProfile();
   const { data: lead } = await supabase.from("leads").select("id, company_name, status, customer_id, customers(agency_id)").eq("id", id).maybeSingle();
   if (!lead) notFound();
-  const { data: p } = await supabase.from("proposals").select("id, code, sent_at, client_type, title, is_main, version, prepay, req_amount, req_reason, req_status, decided_note, requester:profiles!proposals_req_by_fkey(full_name), decider:profiles!proposals_decided_by_fkey(full_name), proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
+  const { data: p } = await supabase.from("proposals").select("id, code, sent_at, client_type, title, campaign, is_main, version, prepay, req_amount, req_reason, req_status, decided_note, requester:profiles!proposals_req_by_fkey(full_name), decider:profiles!proposals_decided_by_fkey(full_name), proposal_items(*)").eq("id", pid).eq("lead_id", id).maybeSingle();
   if (!p) notFound();
   const type = (p?.client_type ?? null) as ClientType | null;
   const items = ((p?.proposal_items ?? []) as Item[]).sort((a, b) => STATIONS.indexOf(a.station as (typeof STATIONS)[number]) - STATIONS.indexOf(b.station as (typeof STATIONS)[number]));
@@ -96,9 +96,10 @@ export default async function ProposalPage({
           </div>
 
           <div className="card row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-            <form action={renameProposal} className="row" style={{ gap: 6, alignItems: "flex-end", flex: 1, minWidth: 240 }}>
+            <form action={renameProposal} className="row" style={{ gap: 6, alignItems: "flex-end", flex: 1, minWidth: 240, flexWrap: "wrap" }}>
               {ids}<input type="hidden" name="version" value={p.version} />
-              <label style={{ flex: 1 }}>Όνομα πρότασης<input name="title" defaultValue={p.title} required maxLength={80} /></label>
+              <label style={{ flex: 1, minWidth: 180 }}>Όνομα πρότασης<input name="title" defaultValue={p.title} required maxLength={80} /></label>
+              <label style={{ flex: 1, minWidth: 180 }}>Για ποια καμπάνια είναι; (προαιρετικά)<input name="campaign" defaultValue={(p.campaign as string | null) ?? ""} maxLength={120} placeholder="π.χ. Χριστούγεννα, Εγκαίνια" /></label>
               <button type="submit" className="secondary">Αποθήκευση</button>
             </form>
             {p.is_main ? (
@@ -123,7 +124,7 @@ export default async function ProposalPage({
                     <div key={i.id} style={{ border: "1px solid #ebe8ef", borderRadius: 12, padding: 12 }}>
                       <div className="row" style={{ justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
                         <div style={{ minWidth: 200, flex: 1 }}>
-                          <strong>{i.title}</strong> <span className="badge gray">{i.kind === "plan" ? "Κοστολόγηση" : "Τιμοκατάλογος"}</span>
+                          <strong>{i.title}</strong> <span className="badge gray">{i.kind === "plan" ? "Κοστολόγηση" : "Τιμοκατάλογος"}</span>{i.code && <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>{i.code}</span>}
                           <div className="muted">{t.bonus && i.long_detail ? i.long_detail : i.detail}</div>
                           <div className="muted" style={{ fontSize: 13 }}>
                             {eur(t.perMonth)} / μήνα{t.bonus && <span className="badge good" style={{ marginLeft: 6 }}>bonus {i.long_months}+ μηνών</span>}

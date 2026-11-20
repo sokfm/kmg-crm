@@ -106,7 +106,7 @@ export function PlanCalculator({ cols, slots, defaultStart, lockStation, initial
   return (
     <div className="stack">
       <div className="card grid2">
-        <label>{save ? "Όνομα πλάνου / σποτ" : "Προϊόν / πελάτης"}<input value={product} onChange={(e) => setProduct(e.target.value)} placeholder={save ? "π.χ. Σποτ προσφορών 20''" : "π.χ. JUMBO – Χριστούγεννα"} /></label>
+        <label>{save ? "Όνομα πλάνου (προαιρετικά)" : "Προϊόν / πελάτης"}<input value={product} onChange={(e) => setProduct(e.target.value)} placeholder={save ? "αυτόματα: σταθμός, διάρκεια, έναρξη" : "π.χ. JUMBO – Χριστούγεννα"} /></label>
         {lockStation ? (
           <label>Σταθμός<input value={station} readOnly disabled /></label>
         ) : (

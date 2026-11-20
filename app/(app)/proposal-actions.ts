@@ -45,7 +45,10 @@ export async function createProposal(f: FormData) {
   const leadId = s(f, "lead_id")!;
   const type = s(f, "client_type") as ClientType | null;
   if (!type || !TYPES.includes(type)) go(list(leadId), { error: "Διάλεξε είδος πελάτη" });
-  const { data, error } = await supabase.from("proposals").insert({ lead_id: leadId, client_type: type, title: (s(f, "title") ?? "Πρόταση").slice(0, 80) }).select("id").single();
+  // Χωρίς όνομα → το βάζει η βάση («ΠΕΛΑΤΗΣ · καμπάνια» ή «ΠΕΛΑΤΗΣ · μήνας έτος»)
+  const row: Record<string, unknown> = { lead_id: leadId, client_type: type, campaign: s(f, "campaign")?.slice(0, 120) ?? null };
+  if (s(f, "title")) row.title = s(f, "title")!.slice(0, 80);
+  const { data, error } = await supabase.from("proposals").insert(row).select("id").single();
   if (error || !data) go(list(leadId), { error: FAIL });
   revalidatePath(`/leads/${leadId}`);
   go(pp(leadId, data!.id));
@@ -71,7 +74,7 @@ export async function renameProposal(f: FormData) {
   const pid = s(f, "proposal_id")!;
   const title = s(f, "title");
   if (!title) go(pp(leadId, pid), { error: "Γράψε όνομα" });
-  const { data, error } = await supabase.from("proposals").update({ title: title!.slice(0, 80) }).eq("id", pid).eq("version", Number(s(f, "version"))).select("id");
+  const { data, error } = await supabase.from("proposals").update({ title: title!.slice(0, 80), campaign: s(f, "campaign")?.slice(0, 120) ?? null }).eq("id", pid).eq("version", Number(s(f, "version"))).select("id");
   if (error) go(pp(leadId, pid), { error: FAIL });
   if (!data || data.length === 0) go(pp(leadId, pid), { conflict: "1" });
   revalidatePath(`/leads/${leadId}`);
@@ -94,12 +97,12 @@ export async function copyProposal(f: FormData) {
   const { supabase } = await requireProfile();
   const leadId = s(f, "lead_id")!;
   const pid = s(f, "proposal_id")!;
-  const { data: src } = await supabase.from("proposals").select("client_type, title, prepay, offer_subtitle, proposal_items(*)").eq("id", pid).eq("lead_id", leadId).maybeSingle();
+  const { data: src } = await supabase.from("proposals").select("client_type, title, campaign, prepay, offer_subtitle, proposal_items(*)").eq("id", pid).eq("lead_id", leadId).maybeSingle();
   if (!src) go(list(leadId), { error: "Η πρόταση δεν βρέθηκε" });
-  const { data: neu, error } = await supabase.from("proposals").insert({ lead_id: leadId, client_type: src!.client_type, prepay: src!.prepay, offer_subtitle: src!.offer_subtitle, title: `${src!.title} (αντίγραφο)`.slice(0, 80) }).select("id").single();
+  const { data: neu, error } = await supabase.from("proposals").insert({ lead_id: leadId, client_type: src!.client_type, prepay: src!.prepay, offer_subtitle: src!.offer_subtitle, campaign: src!.campaign, title: `${src!.title} (αντίγραφο)`.slice(0, 80) }).select("id").single();
   if (error || !neu) go(pp(leadId, pid), { error: FAIL });
   const rows = ((src!.proposal_items ?? []) as Record<string, unknown>[]).map((r) => {
-    const { id: _id, proposal_id: _p, created_at: _c, updated_at: _u, updated_by: _b, version: _v, confirmed_start: _cs, ...rest } = r;   // το αντίγραφο είναι νέα πρόταση: δεν κληρονομεί επιβεβαιωμένη έναρξη
+    const { id: _id, proposal_id: _p, created_at: _c, updated_at: _u, updated_by: _b, version: _v, confirmed_start: _cs, code: _code, ...rest } = r;   // το αντίγραφο είναι νέα πρόταση: δεν κληρονομεί επιβεβαιωμένη έναρξη
     return { ...rest, proposal_id: neu!.id };
   });
   if (rows.length) {
