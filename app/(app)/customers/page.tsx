@@ -50,7 +50,27 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   if (sp.agency) q = q.eq("agency_id", sp.agency);
   if (sp.q && searchKey(sp.q)) q = q.like("name_key", `%${searchKey(sp.q)}%`);
   const { data, count } = await q;
-  const rows = ((data ?? []) as unknown as Row[]).map((r) => ({ ...r, profiles: r.owner_name ? { full_name: r.owner_name } : null }));
+  const rawRows = ((data ?? []) as unknown as Row[]).map((r) => ({ ...r, profiles: r.owner_name ? { full_name: r.owner_name } : null, brands: 0 }));
+  // Group: στη λίστα δείχνει το ΣΥΝΟΛΟ των brands του (τζίρος, τελευταία καμπάνια, σταθμοί), όχι μηδέν
+  const groupIds = rawRows.filter((r) => r.is_group).map((r) => r.id);
+  const { data: kids } = groupIds.length
+    ? await supabase.from("customers_x").select("parent_id, lifetime_revenue, revenue_by_year, last_period, stations, rev_ok").in("parent_id", groupIds)
+    : { data: [] };
+  type Kid = { parent_id: string; lifetime_revenue: number | null; revenue_by_year: Record<string, number> | null; last_period: string | null; stations: string[] | null; rev_ok: boolean };
+  const rows = rawRows.map((r) => {
+    const ks = ((kids ?? []) as Kid[]).filter((k) => k.parent_id === r.id);
+    if (!r.is_group || ks.length === 0) return r;
+    const byYear: Record<string, number> = { ...(r.revenue_by_year ?? {}) };
+    for (const k of ks) for (const [y, v] of Object.entries(k.revenue_by_year ?? {})) byYear[y] = (byYear[y] ?? 0) + Number(v);
+    return {
+      ...r, brands: ks.length,
+      rev_ok: r.rev_ok && ks.every((k) => k.rev_ok),
+      lifetime_revenue: Number(r.lifetime_revenue ?? 0) + ks.reduce((t, k) => t + Number(k.lifetime_revenue ?? 0), 0),
+      revenue_by_year: byYear,
+      last_period: [r.last_period, ...ks.map((k) => k.last_period)].filter(Boolean).sort().pop() ?? null,
+      stations: [...new Set([...(r.stations ?? []), ...ks.flatMap((k) => k.stations ?? [])])],
+    };
+  });
 
   const [{ data: people }, { data: agencies }, { data: pend }] = await Promise.all([
     isAdmin
@@ -174,7 +194,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
               return (
                 <tr key={c.id} id={`c-${c.id}`} style={sp.hl === c.id ? { background: "#fff6d6" } : undefined}>
                   {isAdmin && <td><input type="checkbox" name="ids" value={c.id} form="merge" data-name={c.display_name} data-rev={Number(c.lifetime_revenue ?? 0)} style={{ width: 17, height: 17 }} /></td>}
-                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link>{c.is_group && <span className="badge onair" style={{ marginLeft: 6 }}>Group</span>}{c.parent_name && <div className="muted" style={{ fontSize: 12 }}>Group: {c.parent_name}</div>}<div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
+                  <td><Link href={`/customers/${c.id}`} style={{ fontWeight: 600 }}>{c.display_name}</Link>{c.is_group && <span className="badge onair" style={{ marginLeft: 6 }}>Group{c.brands ? ` · ${c.brands} ${c.brands === 1 ? "brand" : "brands"}` : ""}</span>}{c.parent_name && <div className="muted" style={{ fontSize: 12 }}>Group: {c.parent_name}</div>}<div className="muted show-m">{aeLabel(c, true) ? `AE: ${aeLabel(c, true)}` : `Βάση${c.served_by ? ` · πριν: ${c.served_by}` : ""}`}</div></td>
                   <td className="hide-m muted">{c.category ?? ""}</td>
                   <td>{(() => { const st = customerState(c); return <span className={`badge ${st.cls}`}>{st.label}</span>; })()}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{periodGr(c.last_period)}</td>
